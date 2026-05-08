@@ -1,5 +1,10 @@
 # Portlite
 
+[![.NET 8](https://img.shields.io/badge/.NET-8-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![Blazor WASM](https://img.shields.io/badge/Blazor-WASM-512BD4?logo=blazor&logoColor=white)](https://dotnet.microsoft.com/apps/aspnet/web-apps/blazor)
+[![Azure](https://img.shields.io/badge/Azure-SQL_+_AI-0089D6?logo=microsoftazure&logoColor=white)](https://azure.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Personal portfolio dashboard for tracking US equities — live prices, daily snapshots, AI-powered portfolio analysis, and a company news feed scoped to held symbols.
 
 **Stack:** .NET 8 · Blazor WASM · EF Core 8 · Azure SQL · Finnhub · Azure AI Foundry
@@ -76,3 +81,9 @@ tests/
 - Daily snapshots are written by a background hosted service in the API.
 - News + price data are cached in-memory with TTL to stay under Finnhub free-tier limits (60 req/min).
 - AI analysis responses are persisted per portfolio with a content hash to allow cache reuse.
+
+---
+
+## License
+
+[MIT](LICENSE) © Berk Arat
