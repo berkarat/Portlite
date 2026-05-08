@@ -1,0 +1,198 @@
+@page "/haberler"
+@inject ApiClient Api
+@inject PortfolioStore Store
+@implements IDisposable
+
+<PageTitle>Portlite — Haberler</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <div class="eyebrow">Akış</div>
+        <h1 class="page-title">Haberler</h1>
+    </div>
+    <div class="btn-row" style="margin-bottom:0; gap:14px; align-items:center;">
+        <button class="btn" @onclick="ReloadAsync" disabled="@_loading">
+            @(_loading ? "Yükleniyor…" : "Yenile")
+        </button>
+    </div>
+</div>
+
+<PortfolioChips />
+
+@if (Store.Selected is null)
+{
+    <div class="empty">Bir alt portföy seç.</div>
+}
+else
+{
+    <div class="panel" style="margin-bottom:18px;">
+        <div class="panel__body--padded news-filters">
+            <div class="news-filters__group">
+                <span class="eyebrow">Sembol</span>
+                <div class="news-filters__chips">
+                    <button class="chip @(_selectedSymbol is null ? "active" : "")"
+                            @onclick="() => SetSymbol(null)">Tümü</button>
+                    @foreach (var s in _symbols)
+                    {
+                        <button class="chip @(_selectedSymbol == s ? "active" : "")"
+                                @onclick="() => SetSymbol(s)">@s</button>
+                    }
+                </div>
+            </div>
+            <div class="news-filters__group">
+                <span class="eyebrow">Aralık</span>
+                <div class="news-filters__chips">
+                    @foreach (var d in new[] { 3, 7, 14, 30 })
+                    {
+                        <button class="chip @(_days == d ? "active" : "")"
+                                @onclick="() => SetDays(d)">@d gün</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="news-grid">
+            @for (var i = 0; i < 6; i++)
+            {
+                <div class="panel"><div class="panel__body--padded"><div class="skeleton" style="height:120px;"></div></div></div>
+            }
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert--err">@_error</div>
+    }
+    else if (_items is null || _items.Count == 0)
+    {
+        <div class="empty">Haber bulunamadı.</div>
+    }
+    else
+    {
+        <div class="news-grid">
+            @foreach (var n in _items)
+            {
+                <a class="panel news-card" href="@n.Url" target="_blank" rel="noopener">
+                    @if (!string.IsNullOrEmpty(n.ImageUrl))
+                    {
+                        <div class="news-card__img" style="background-image:url('@n.ImageUrl')"></div>
+                    }
+                    <div class="news-card__body">
+                        <div class="news-card__meta">
+                            <span class="news-card__sym">@n.Symbol</span>
+                            <span class="news-card__source">@n.Source</span>
+                            <span class="news-card__time">@RelativeTime(n.PublishedAt)</span>
+                        </div>
+                        <div class="news-card__headline">@n.Headline</div>
+                        @if (!string.IsNullOrEmpty(n.Summary))
+                        {
+                            <div class="news-card__summary">@Truncate(n.Summary, 220)</div>
+                        }
+                    </div>
+                </a>
+            }
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<NewsItemDto>? _items;
+    private List<string> _symbols = new();
+    private string? _selectedSymbol;
+    private int _days = 7;
+    private Guid? _lastLoadedId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Changed += OnStoreChanged;
+        if (Store.Portfolios.Count == 0) await Store.RefreshAsync();
+        await LoadIfNeeded();
+    }
+
+    private async void OnStoreChanged()
+    {
+        await LoadIfNeeded();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadIfNeeded()
+    {
+        if (Store.SelectedId is null) { _loading = false; return; }
+        if (_lastLoadedId == Store.SelectedId) return;
+        _lastLoadedId = Store.SelectedId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Store.SelectedId is null) return;
+        _loading = true;
+        _error = null;
+        try
+        {
+            if (_selectedSymbol is null)
+            {
+                _items = await Api.GetPortfolioNewsAsync(Store.SelectedId.Value, _days, take: 60);
+            }
+            else
+            {
+                _items = await Api.GetSymbolNewsAsync(_selectedSymbol, _days, take: 60);
+            }
+
+            // Build symbol filter chips from positions (only first time)
+            if (_symbols.Count == 0)
+            {
+                var positions = await Api.ListPositionsAsync(Store.SelectedId.Value);
+                _symbols = positions?
+                    .Where(p => p.Quantity > 0)
+                    .Select(p => p.AssetSymbol)
+                    .Distinct()
+                    .OrderBy(s => s)
+                    .ToList() ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ReloadAsync() => await LoadAsync();
+
+    private async Task SetSymbol(string? sym)
+    {
+        if (_selectedSymbol == sym) return;
+        _selectedSymbol = sym;
+        await LoadAsync();
+    }
+
+    private async Task SetDays(int d)
+    {
+        if (_days == d) return;
+        _days = d;
+        await LoadAsync();
+    }
+
+    private static string RelativeTime(DateTime utc)
+    {
+        var diff = DateTime.UtcNow - utc;
+        if (diff.TotalMinutes < 1) return "şimdi";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}dk";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}sa";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}g";
+        return utc.ToLocalTime().ToString("dd MMM");
+    }
+
+    private static string Truncate(string s, int max) =>
+        s.Length <= max ? s : s.Substring(0, max).TrimEnd() + "…";
+
+    public void Dispose() => Store.Changed -= OnStoreChanged;
+}

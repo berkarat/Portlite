@@ -1,0 +1,28 @@
+@using Portlite.Web.Api
+@inject PortfolioStore Store
+@implements IDisposable
+
+@if (Store.Portfolios.Count == 0)
+{
+    <div class="alert alert--info">
+        Henüz alt portföy yok. <a href="portfolios">Portföyler sayfasından</a> oluştur.
+    </div>
+}
+else
+{
+    <div class="chip-row">
+        @foreach (var p in Store.Portfolios.OrderBy(x => x.DisplayOrder))
+        {
+            <button class="chip @(Store.SelectedId == p.Id ? "active" : "")"
+                    @onclick="() => Store.Select(p.Id)">
+                <span class="chip__code">@p.Code</span>
+                <span>@p.Name</span>
+            </button>
+        }
+    </div>
+}
+
+@code {
+    protected override void OnInitialized() => Store.Changed += StateHasChanged;
+    public void Dispose() => Store.Changed -= StateHasChanged;
+}

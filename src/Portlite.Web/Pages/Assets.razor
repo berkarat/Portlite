@@ -1,0 +1,212 @@
+@page "/assets"
+@inject ApiClient Api
+
+<PageTitle>Varlık Kataloğu — Portlite</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <div class="eyebrow">Sembol Kataloğu</div>
+        <h1 class="page-title">Varlıklar</h1>
+    </div>
+    <div class="btn-row" style="margin-bottom:0;">
+        <button class="btn btn--primary" @onclick="OpenCreate">+ Yeni Varlık</button>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="alert alert--err">@_error</div> }
+
+<div class="panel">
+    @if (_assets is null)
+    {
+        <div class="panel__body--padded"><div class="skeleton" style="height:200px;"></div></div>
+    }
+    else if (_assets.Count == 0)
+    {
+        <div class="empty">Henüz varlık yok. Trade eklemeden önce sembolü kaydet.</div>
+    }
+    else
+    {
+        <table class="dt">
+            <thead>
+                <tr>
+                    <th>Sembol</th>
+                    <th>İsim</th>
+                    <th>Tür</th>
+                    <th>Para Birimi</th>
+                    <th>Detay</th>
+                    <th class="right"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in _assets.OrderBy(x => x.Symbol))
+                {
+                    <tr>
+                        <td><span class="ticker">@a.Symbol</span></td>
+                        <td>@a.Name</td>
+                        <td>
+                            <span class="badge @(a.Type == AssetType.Option ? "badge--option" : "")">@a.Type</span>
+                        </td>
+                        <td class="num">@a.Currency</td>
+                        <td style="color:var(--text-tertiary);">
+                            @if (a.OptionDetail is not null)
+                            {
+                                <span>@a.OptionDetail.UnderlyingSymbol · @a.OptionDetail.OptionType · @a.OptionDetail.Strike.ToString("N2") · @a.OptionDetail.Expiry.ToString("dd MMM yyyy")</span>
+                            }
+                            else { <span>—</span> }
+                        </td>
+                        <td class="right">
+                            <button class="btn btn--ghost" @onclick="() => GetQuoteAsync(a.Symbol)">Anlık Fiyat</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (_quote is not null)
+{
+    <div class="alert alert--info" style="margin-top:18px;">
+        <strong>@_quote.Symbol</strong>: @Format.Sign(_quote.Currency)@_quote.Current.ToString("N2")
+        <span class="num @Format.DeltaClass(_quote.Change)">
+            (@Format.Signed(_quote.Change, _quote.Currency), @Format.SignedPct(_quote.ChangePercent))
+        </span>
+        — Önceki kapanış @Format.Sign(_quote.Currency)@_quote.PreviousClose.ToString("N2") · @_quote.Source · @_quote.Timestamp.ToLocalTime().ToString("HH:mm:ss")
+    </div>
+}
+
+<Modal IsOpen="@_modalOpen" Title="Yeni Varlık" OnClose="Close">
+    <Body>
+        <div class="field--row">
+            <div class="field">
+                <label>Sembol</label>
+                <input @bind="_form.Symbol" placeholder="AAPL" />
+            </div>
+            <div class="field">
+                <label>Tür</label>
+                <select @bind="_form.Type">
+                    <option value="@AssetType.Stock">Stock</option>
+                    <option value="@AssetType.Option">Option</option>
+                </select>
+            </div>
+        </div>
+        <div class="field">
+            <label>İsim</label>
+            <input @bind="_form.Name" placeholder="Apple Inc." />
+        </div>
+        <div class="field">
+            <label>Para Birimi</label>
+            <select @bind="_form.Currency">
+                <option value="@CurrencyCode.USD">USD</option>
+                <option value="@CurrencyCode.TRY">TRY</option>
+            </select>
+        </div>
+        @if (_form.Type == AssetType.Option)
+        {
+            <hr class="hr" style="margin:8px 0;" />
+            <div class="eyebrow">Opsiyon Detayları</div>
+            <div class="field">
+                <label>Underlying Sembol</label>
+                <input @bind="_form.UnderlyingSymbol" placeholder="AAPL" />
+            </div>
+            <div class="field--row">
+                <div class="field">
+                    <label>Tip</label>
+                    <select @bind="_form.OptionType">
+                        <option value="@OptionType.Call">Call</option>
+                        <option value="@OptionType.Put">Put</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Strike</label>
+                    <input type="number" step="0.01" @bind="_form.Strike" />
+                </div>
+            </div>
+            <div class="field--row">
+                <div class="field">
+                    <label>Expiry</label>
+                    <input type="date" @bind="_form.Expiry" />
+                </div>
+                <div class="field">
+                    <label>Multiplier</label>
+                    <input type="number" @bind="_form.Multiplier" />
+                </div>
+            </div>
+        }
+        @if (_formError is not null) { <div class="field-error">@_formError</div> }
+    </Body>
+    <Footer>
+        <button class="btn btn--ghost" @onclick="Close">İptal</button>
+        <button class="btn btn--primary" @onclick="SaveAsync" disabled="@_saving">@(_saving ? "Kaydediliyor…" : "Kaydet")</button>
+    </Footer>
+</Modal>
+
+@code {
+    private string? _error;
+    private List<AssetDto>? _assets;
+    private bool _modalOpen;
+    private bool _saving;
+    private string? _formError;
+    private QuoteDto? _quote;
+
+    private FormModel _form = new();
+
+    private class FormModel
+    {
+        public string Symbol { get; set; } = "";
+        public string Name { get; set; } = "";
+        public AssetType Type { get; set; } = AssetType.Stock;
+        public CurrencyCode Currency { get; set; } = CurrencyCode.USD;
+        public string UnderlyingSymbol { get; set; } = "";
+        public OptionType OptionType { get; set; } = OptionType.Call;
+        public decimal Strike { get; set; }
+        public DateTime Expiry { get; set; } = DateTime.UtcNow.Date.AddMonths(1);
+        public int Multiplier { get; set; } = 100;
+    }
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _error = null;
+        try { _assets = await Api.ListAssetsAsync() ?? new(); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private void OpenCreate()
+    {
+        _form = new FormModel();
+        _formError = null;
+        _modalOpen = true;
+    }
+    private void Close() => _modalOpen = false;
+
+    private async Task SaveAsync()
+    {
+        _formError = null; _saving = true; StateHasChanged();
+        try
+        {
+            OptionDetailDto? od = null;
+            if (_form.Type == AssetType.Option)
+            {
+                od = new OptionDetailDto(_form.UnderlyingSymbol, _form.OptionType, _form.Strike,
+                    DateOnly.FromDateTime(_form.Expiry), _form.Multiplier);
+            }
+            await Api.CreateAssetAsync(new CreateAssetRequest(_form.Symbol, _form.Name, _form.Type, _form.Currency, od));
+            _modalOpen = false;
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _formError = ex.Message;
+        }
+        finally { _saving = false; StateHasChanged(); }
+    }
+
+    private async Task GetQuoteAsync(string symbol)
+    {
+        _quote = null; _error = null;
+        try { _quote = await Api.GetQuoteAsync(symbol); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+}

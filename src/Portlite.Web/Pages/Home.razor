@@ -1,0 +1,893 @@
+@page "/"
+@inject ApiClient Api
+@inject PortfolioStore Store
+@inject IJSRuntime Js
+@implements IDisposable
+
+<PageTitle>Portlite — Dashboard</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <div class="eyebrow">@DateTime.Now.ToString("dd MMMM yyyy · dddd", _trCulture)</div>
+        <h1 class="page-title">Dashboard</h1>
+    </div>
+    <div class="btn-row" style="margin-bottom:0; gap:10px; align-items:center;">
+        <span class="market-chip @(MarketIsOpen ? "market-chip--open" : "")">
+            <span class="market-chip__dot"></span>
+            <span>NYSE @(MarketIsOpen ? "Açık" : "Kapalı")</span>
+            <span class="market-chip__hours">· @MarketHoursText</span>
+        </span>
+        @if (_lastUpdated is not null)
+        {
+            <span class="last-update last-update--compact">
+                son: @_lastUpdated.Value.ToLocalTime().ToString("HH:mm:ss")
+            </span>
+        }
+        <button class="btn" @onclick="ManualRefreshAsync" disabled="@_isRefreshing">
+            @(_isRefreshing ? "Yenileniyor…" : "Yenile")
+        </button>
+    </div>
+</div>
+
+<PortfolioChips />
+
+@if (Store.Selected is null)
+{
+    <div class="empty">Bir alt portföy seç.</div>
+}
+else if (_loading)
+{
+    <div class="kpi-grid">
+        @for (var i = 0; i < 4; i++)
+        {
+            <div class="kpi"><div class="skeleton" style="width:60%;height:34px;"></div></div>
+        }
+    </div>
+    <div class="dash-grid">
+        <div class="panel"><div class="panel__body--padded"><div class="skeleton" style="height:200px;"></div></div></div>
+        <div class="panel"><div class="panel__body--padded"><div class="skeleton" style="height:200px;"></div></div></div>
+    </div>
+}
+else
+{
+    @if (_error is not null) { <div class="alert alert--err">@_error</div> }
+
+    @if (TopConcentration is not null && TopConcentration.Value.pct >= 20m)
+    {
+        <div class="alert alert--info" style="margin-bottom:20px;">
+            ⚠ <strong>Konsantrasyon uyarısı:</strong> Portföyünün %@TopConcentration.Value.pct.ToString("N1")'si tek bir sembolde (<strong>@TopConcentration.Value.symbol</strong>). Tek bir hisseye fazla bağlısın — risk yüksek.
+        </div>
+    }
+
+    @if (Store.Selected is not null && _positions is not null && _positions.Any(p => p.Quantity > 0))
+    {
+        <div class="ai-cta">
+            <button class="btn btn--primary" @onclick="() => _aiOpen = true">
+                🤖 Portföyü Analiz Et
+            </button>
+        </div>
+    }
+
+    <div class="hero-grid">
+        <div class="panel hero-card">
+            <div class="hero-card__head">
+                <div class="eyebrow">Toplam Portföy</div>
+                <span class="chip-currency">USD</span>
+            </div>
+            @if (_kpi is null)
+            {
+                <div class="hero-card__big">—</div>
+            }
+            else
+            {
+                <div class="hero-card__big num">$@_kpi.TotalEquity.Amount.ToString("N2")</div>
+                @if (_snapshot is not null)
+                {
+                    <div class="hero-card__split">
+                        <div class="hero-split">
+                            <span class="hero-split__lbl">Hisseler</span>
+                            <span class="hero-split__val num">@Format.Money(_snapshot.MarketValue)</span>
+                        </div>
+                        <div class="hero-split">
+                            <span class="hero-split__lbl">Kullanılabilir Cash</span>
+                            <span class="hero-split__val num">@Format.Money(_snapshot.CashBalance)</span>
+                        </div>
+                    </div>
+                }
+                <div class="hero-card__cash">
+                    Yatırılan <strong class="num">@Format.Money(_kpi.NetCashContributed)</strong> · @Format.ShortDate(_kpi.AsOf)
+                </div>
+                <div class="hero-card__returns">
+                    <div class="ret">
+                        <div class="ret__val @Format.DeltaClass(IntradayChange)">
+                            @(IntradayChange > 0 ? "+" : "")$@Math.Abs(IntradayChange).ToString("N2")
+                            <span class="ret__pct">@Format.SignedPct(IntradayChangePct)</span>
+                        </div>
+                        <div class="ret__lbl">Bugün</div>
+                    </div>
+                    <div class="ret">
+                        <div class="ret__val @Format.DeltaClassPct(ThirtyDayReturnPct)">@Format.SignedPct(ThirtyDayReturnPct)</div>
+                        <div class="ret__lbl">30 Gün</div>
+                    </div>
+                    <div class="ret">
+                        <div class="ret__val @Format.DeltaClassPct(_kpi.AllTimePnLPercent)">@Format.SignedPct(_kpi.AllTimePnLPercent)</div>
+                        <div class="ret__lbl">Toplam</div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="panel hero-movers">
+            @{ var movers = TopMovers; }
+            @if (movers.gainers.Count == 0 && movers.losers.Count == 0)
+            {
+                <div class="empty" style="padding:30px 0;font-size:12px;">Hareket yok</div>
+            }
+            else
+            {
+                <div class="hero-movers__grid">
+                    <div>
+                        <div class="eyebrow">Yükselenler · @movers.gainers.Count</div>
+                        <div class="hero-movers__list">
+                            @if (movers.gainers.Count == 0)
+                            {
+                                <div class="hero-mover hero-mover--empty">—</div>
+                            }
+                            else
+                            {
+                                @foreach (var p in movers.gainers)
+                                {
+                                    <div class="hero-mover hero-mover--gain">
+                                        <span class="hero-mover__sym">@p.AssetSymbol</span>
+                                        <span class="hero-mover__chg num">@Format.SignedPct(p.DayChangePercent)</span>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                    <div>
+                        <div class="eyebrow">Düşenler · @movers.losers.Count</div>
+                        <div class="hero-movers__list">
+                            @if (movers.losers.Count == 0)
+                            {
+                                <div class="hero-mover hero-mover--empty">—</div>
+                            }
+                            else
+                            {
+                                @foreach (var p in movers.losers)
+                                {
+                                    <div class="hero-mover hero-mover--loss">
+                                        <span class="hero-mover__sym">@p.AssetSymbol</span>
+                                        <span class="hero-mover__chg num">@Format.SignedPct(p.DayChangePercent)</span>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="panel hero-chart-card">
+            <div class="eyebrow" style="margin-bottom:8px;">
+                Performans @(_benchmarkSeries.Count > 0 ? "· vs SPY" : "")
+            </div>
+            @if (_perfSeries.Count <= 1)
+            {
+                <div class="empty" style="padding:30px 0;font-size:12px;">
+                    Veri birikiyor — 2+ snapshot gerekli (şu an @_perfSeries.Count)
+                </div>
+            }
+            else
+            {
+                <RadzenChart Style="height:200px;">
+                    <RadzenLineSeries TItem="PerfPoint" Data="@_perfSeries"
+                                      CategoryProperty="Date" ValueProperty="Value"
+                                      Title="Portföy" LineType="LineType.Solid" Smooth="false"
+                                      RenderingOrder="0">
+                        <RadzenMarkers MarkerType="MarkerType.None" />
+                    </RadzenLineSeries>
+                    @if (_benchmarkSeries.Count > 1)
+                    {
+                        <RadzenLineSeries TItem="PerfPoint" Data="@_benchmarkSeries"
+                                          CategoryProperty="Date" ValueProperty="Value"
+                                          Title="SPY" LineType="LineType.Dashed" Smooth="false"
+                                          RenderingOrder="1">
+                            <RadzenMarkers MarkerType="MarkerType.None" />
+                        </RadzenLineSeries>
+                    }
+                    <RadzenCategoryAxis Padding="16" FormatString="{0:dd MMM}" />
+                    <RadzenValueAxis FormatString="{0:N1}%" />
+                    <RadzenLegend Position="LegendPosition.Bottom" />
+                </RadzenChart>
+            }
+        </div>
+    </div>
+
+    <div class="panel" style="margin-top:24px;">
+        <div class="panel__head">
+            <div>
+                <div class="section-title">Pozisyonlar</div>
+                <div class="eyebrow">@(_positions?.Count ?? 0) açık · @Store.Selected.Name</div>
+            </div>
+        </div>
+        @if (_positions is null || _positions.Count == 0)
+        {
+            <div class="empty">Henüz pozisyon yok. <a href="trades">Trade ekle.</a></div>
+        }
+        else
+        {
+            <table class="dt dt--draggable">
+                <thead>
+                    <tr>
+                        <th class="drag-handle"></th>
+                        <th class="@SortClass("symbol")" @onclick='() => ToggleSort("symbol")'>Sembol @SortArrow("symbol")</th>
+                        <th class="right @SortClass("qty")" @onclick='() => ToggleSort("qty")'>Adet @SortArrow("qty")</th>
+                        <th class="right @SortClass("cost")" @onclick='() => ToggleSort("cost")'>Ort. Maliyet @SortArrow("cost")</th>
+                        <th class="right @SortClass("price")" @onclick='() => ToggleSort("price")'>Güncel Fiyat @SortArrow("price")</th>
+                        <th class="right @SortClass("day")" @onclick='() => ToggleSort("day")'>Bugün @SortArrow("day")</th>
+                        <th class="right @SortClass("weight")" @onclick='() => ToggleSort("weight")'>% Portföy @SortArrow("weight")</th>
+                        <th class="right @SortClass("value")" @onclick='() => ToggleSort("value")'>Piyasa Değeri @SortArrow("value")</th>
+                        <th class="right @SortClass("pnl")" @onclick='() => ToggleSort("pnl")'>Toplam K/Z @SortArrow("pnl")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _positions)
+                    {
+                        <tr draggable="true"
+                            class="@(_draggingSymbol == p.AssetSymbol ? "row-dragging" : "")"
+                            ondragover="event.preventDefault()"
+                            @ondragstart="@(() => OnDragStart(p.AssetSymbol))"
+                            @ondrop="@(() => OnDrop(p.AssetSymbol))"
+                            @ondragend="@(() => _draggingSymbol = null)">
+                            <td class="drag-handle" title="Taşımak için sürükle">⋮⋮</td>
+                            <td>
+                                <div class="ticker">@p.AssetSymbol</div>
+                                <div class="ticker-name">@p.AssetName</div>
+                            </td>
+                            <td class="right num">@Format.Qty(p.Quantity)</td>
+                            <td class="right num">@Format.Sign(p.Currency)@p.AverageCost.ToString("N2")</td>
+                            <td class="right num price-cell @FlashClass(p.AssetSymbol)">
+                                @if (p.CurrentPrice.HasValue)
+                                {
+                                    var dir = DirectionClass(p.AssetSymbol);
+                                    <span>@Format.Sign(p.Currency)@p.CurrentPrice.Value.ToString("N2")</span>
+                                    @if (!string.IsNullOrEmpty(dir))
+                                    {
+                                        <span class="price-arrow @dir">@(dir == "tag-pos" ? "▲" : "▼")</span>
+                                    }
+                                }
+                                else { <span class="tag-flat">—</span> }
+                            </td>
+                            <td class="right num @(p.DayChange.HasValue ? Format.DeltaClass(p.DayChange.Value) : "tag-flat")">
+                                @if (p.DayChange.HasValue)
+                                {
+                                    var d = p.DayChange.Value;
+                                    <div>@(d > 0 ? "+" : "")@Format.Sign(p.Currency)@Math.Abs(d).ToString("N2")</div>
+                                    <div style="font-size:11px;">@Format.SignedPct(p.DayChangePercent)</div>
+                                }
+                                else { @("—") }
+                            </td>
+                            <td class="right">
+                                @{ var pp = PortfolioPercent(p); }
+                                @if (pp.HasValue)
+                                {
+                                    var w = Math.Min(pp.Value, 100m).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+                                    <div class="weight-cell">
+                                        <div class="weight-cell__bar" title="@($"{pp.Value:N1}%")">
+                                            <div class="weight-cell__fill" style="width:@w%"></div>
+                                        </div>
+                                        <span class="weight-cell__val num">@($"{pp.Value:N1}%")</span>
+                                    </div>
+                                }
+                                else { <span class="tag-flat">—</span> }
+                            </td>
+                            <td class="right num">
+                                @if (p.MarketValue.HasValue)
+                                { @Format.Sign(p.Currency)@p.MarketValue.Value.ToString("N2") }
+                                else { <span class="tag-flat">—</span> }
+                            </td>
+                            <td class="right num @(p.UnrealizedPnL.HasValue ? Format.DeltaClass(p.UnrealizedPnL.Value) : "tag-flat")">
+                                @if (p.UnrealizedPnL.HasValue)
+                                {
+                                    var u = p.UnrealizedPnL.Value;
+                                    var pct = p.TotalCost > 0 ? (decimal?)(u / p.TotalCost * 100m) : null;
+                                    <div>@(u > 0 ? "+" : "")@Format.Sign(p.Currency)@Math.Abs(u).ToString("N2")</div>
+                                    <div style="font-size:11px;">@Format.SignedPct(pct)</div>
+                                }
+                                else { @("—") }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    <div class="dash-bottom" style="margin-top:24px;">
+        @if (AllocationData.Count > 0)
+        {
+            <div class="panel">
+                <div class="panel__head">
+                    <div>
+                        <div class="section-title">Dağılım</div>
+                        <div class="eyebrow">Sembol ağırlıkları (cash dahil)</div>
+                    </div>
+                </div>
+                <div class="panel__body--padded">
+                    <RadzenChart Style="height:240px;">
+                        <RadzenDonutSeries Data="@AllocationData"
+                                           CategoryProperty="Symbol"
+                                           ValueProperty="Value"
+                                           TItem="AllocationSlice">
+                            <TitleTemplate>
+                                <div style="text-align:center;">
+                                    <div style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;">Toplam</div>
+                                    <div style="font-size:18px;font-weight:700;color:var(--text-primary);font-family:var(--font-mono);">$@AllocationTotal.ToString("N0")</div>
+                                </div>
+                            </TitleTemplate>
+                        </RadzenDonutSeries>
+                        <RadzenLegend Position="LegendPosition.Bottom" />
+                    </RadzenChart>
+                </div>
+                <div class="alloc-list">
+                    @foreach (var slice in AllocationData)
+                    {
+                        <div class="alloc-row">
+                            <span class="alloc-row__sym">@slice.Symbol</span>
+                            <span class="alloc-row__val num">$@slice.Value.ToString("N2")</span>
+                            <span class="alloc-row__pct num">@(((slice.Value / AllocationTotal) * 100).ToString("N1"))%</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="panel">
+            <div class="panel__head">
+                <div>
+                    <div class="section-title">Snapshot</div>
+                    <div class="eyebrow">@(_snapshot is null ? "—" : Format.ShortDate(_snapshot.Date))</div>
+                </div>
+            </div>
+            <div class="panel__body--padded">
+                @if (_snapshot is null)
+                {
+                    <div class="empty" style="padding:20px 0;">Henüz snapshot yok</div>
+                }
+                else
+                {
+                    <div style="display:flex;flex-direction:column;gap:14px;">
+                        <SnapshotRow Label="Market Value" Value="@Format.Money(_snapshot.MarketValue)" />
+                        <SnapshotRow Label="Cost Basis" Value="@Format.Money(_snapshot.CostBasis)" />
+                        <SnapshotRow Label="Cash" Value="@Format.Money(_snapshot.CashBalance)" />
+                        <SnapshotRow Label="Realized PnL" Value="@Format.Money(_snapshot.RealizedPnL)" Tone="@Format.DeltaClass(_snapshot.RealizedPnL.Amount)" />
+                        <SnapshotRow Label="Unrealized PnL" Value="@Format.Money(_snapshot.UnrealizedPnL)" Tone="@Format.DeltaClass(_snapshot.UnrealizedPnL.Amount)" />
+                        <hr class="hr" style="margin:6px 0;" />
+                        <SnapshotRow Label="Toplam Equity" Value="@Format.Money(_snapshot.TotalEquity)" Bold="true" />
+                        @if (_snapshot.MissingPriceSymbols.Any())
+                        {
+                            <div class="kpi__missing">eksik fiyat: @string.Join(", ", _snapshot.MissingPriceSymbols)</div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top:24px;">
+        <NewsPanel PortfolioId="@Store.SelectedId" />
+    </div>
+
+    <div class="panel" style="margin-top:24px;">
+        <div class="panel__head">
+            <div>
+                <div class="section-title">Son İşlemler</div>
+                <div class="eyebrow">@(_trades?.Count ?? 0) trade · son 8 görüntülenir</div>
+            </div>
+            <a href="trades" class="btn btn--ghost">Hepsi →</a>
+        </div>
+        @if (_trades is null || _trades.Count == 0)
+        {
+            <div class="empty">Henüz işlem yok.</div>
+        }
+        else
+        {
+            <table class="dt">
+                <thead>
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Sembol</th>
+                        <th>Yön</th>
+                        <th class="right">Adet</th>
+                        <th class="right">Birim Fiyat</th>
+                        <th class="right">Toplam</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in _trades.Take(8))
+                    {
+                        <tr>
+                            <td class="num">@Format.ShortDate(t.ExecutedAt)</td>
+                            <td><span class="ticker">@t.AssetSymbol</span></td>
+                            <td><span class="badge @(t.Side == TradeSide.Buy ? "badge--buy" : "badge--sell")">@t.Side</span></td>
+                            <td class="right num">@Format.Qty(t.Quantity)</td>
+                            <td class="right num">$@t.Price.ToString("N2")</td>
+                            <td class="right num">$@((t.Quantity * t.Price + t.Fee).ToString("N2"))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+<AnalysisModal IsOpen="@_aiOpen"
+               PortfolioId="@Store.SelectedId"
+               OnClose="() => _aiOpen = false" />
+
+@code {
+    private bool _loading = true;
+    private bool _aiOpen;
+    private bool _isRefreshing;
+    private string? _error;
+    private KpiSummaryDto? _kpi;
+    private List<PositionDto>? _positions;
+    private List<TradeDto>? _trades;
+    private PortfolioSnapshotDto? _snapshot;
+    private List<PortfolioSnapshotDto> _snapshots = new();
+    private Guid? _lastLoadedId;
+    private DateTime? _lastUpdated;
+
+    private System.Threading.Timer? _pollTimer;
+    private const int PollIntervalSeconds = 30;
+
+    private List<string> _positionOrder = new();
+    private string? _draggingSymbol;
+
+    // Sort state — when null, falls back to manual _positionOrder.
+    private string? _sortBy = "weight";
+    private bool _sortDesc = true;
+
+    public class AllocationSlice
+    {
+        public string Symbol { get; set; } = "";
+        public decimal Value { get; set; }
+    }
+
+    public class PerfPoint
+    {
+        public DateTime Date { get; set; }
+        public decimal Value { get; set; }
+    }
+
+    private List<PerfPoint> _perfSeries = new();
+    private List<PerfPoint> _benchmarkSeries = new();
+
+    private Dictionary<string, decimal> _prevPrices = new();
+    private Dictionary<string, string> _lastDirection = new(); // sym -> "up"/"down" (persists)
+    private Dictionary<string, string> _flashState = new();    // sym -> "flash-up"/"flash-down" (1.5s)
+    private CancellationTokenSource? _flashCts;
+
+    private (string symbol, decimal pct)? TopConcentration
+    {
+        get
+        {
+            if (AllocationTotal <= 0) return null;
+            var stockOnly = AllocationData.Where(s => s.Symbol != "Cash").ToList();
+            if (stockOnly.Count == 0) return null;
+            var top = stockOnly.OrderByDescending(s => s.Value).First();
+            return (top.Symbol, top.Value / AllocationTotal * 100m);
+        }
+    }
+
+    private (List<PositionDto> gainers, List<PositionDto> losers) TopMovers
+    {
+        get
+        {
+            if (_positions is null) return (new(), new());
+            var withChange = _positions.Where(p => p.DayChangePercent.HasValue && p.Quantity > 0).ToList();
+            if (withChange.Count == 0) return (new(), new());
+            var g = withChange.Where(p => p.DayChangePercent!.Value > 0)
+                .OrderByDescending(p => p.DayChangePercent).ToList();
+            var l = withChange.Where(p => p.DayChangePercent!.Value < 0)
+                .OrderBy(p => p.DayChangePercent).ToList();
+            return (g, l);
+        }
+    }
+
+    private decimal IntradayChange =>
+        _positions?.Sum(p => p.DayChange ?? 0m) ?? 0m;
+
+    private decimal? IntradayChangePct
+    {
+        get
+        {
+            if (_positions is null) return null;
+            var prevTotal = _positions.Sum(p =>
+                p.PreviousClose.HasValue && p.Quantity > 0
+                    ? p.Quantity * p.PreviousClose.Value
+                    : 0m);
+            return prevTotal > 0 ? IntradayChange / prevTotal * 100m : null;
+        }
+    }
+
+    private List<AllocationSlice> AllocationData
+    {
+        get
+        {
+            var list = new List<AllocationSlice>();
+            if (_positions is not null)
+            {
+                foreach (var p in _positions.Where(p => p.MarketValue.HasValue && p.MarketValue.Value > 0))
+                    list.Add(new AllocationSlice { Symbol = p.AssetSymbol, Value = p.MarketValue!.Value });
+            }
+            if (_snapshot is not null && _snapshot.CashBalance.Amount > 0)
+                list.Add(new AllocationSlice { Symbol = "Cash", Value = _snapshot.CashBalance.Amount });
+            return list.OrderByDescending(x => x.Value).ToList();
+        }
+    }
+
+    private decimal AllocationTotal => AllocationData.Sum(s => s.Value);
+
+    private decimal? ThirtyDayReturnPct
+    {
+        get
+        {
+            if (_snapshots.Count < 2) return null;
+            var latest = _snapshots[^1];
+            var threshold = latest.Date.AddDays(-30);
+            var anchor = _snapshots.FirstOrDefault(s => s.Date >= threshold && s.Date < latest.Date);
+            if (anchor is null) return null;
+            var prev = anchor.TotalEquity.Amount;
+            var curr = latest.TotalEquity.Amount;
+            return prev > 0 ? (curr - prev) / prev * 100m : null;
+        }
+    }
+
+    private decimal? PortfolioPercent(PositionDto p)
+    {
+        if (!p.MarketValue.HasValue) return null;
+        var total = AllocationTotal;
+        if (total <= 0) return null;
+        return p.MarketValue.Value / total * 100m;
+    }
+
+    private static readonly System.Globalization.CultureInfo _trCulture = new("tr-TR");
+
+    private bool MarketIsOpen
+    {
+        get
+        {
+            // US equities: Mon-Fri, 14:30-21:00 UTC (09:30-16:00 ET, no DST handling)
+            var now = DateTime.UtcNow;
+            if (now.DayOfWeek == DayOfWeek.Saturday || now.DayOfWeek == DayOfWeek.Sunday) return false;
+            var open = new TimeOnly(14, 30);
+            var close = new TimeOnly(21, 0);
+            var t = TimeOnly.FromDateTime(now);
+            return t >= open && t < close;
+        }
+    }
+
+    private string MarketHoursText
+    {
+        get
+        {
+            if (MarketIsOpen) return "14:30–21:00 UTC";
+            var now = DateTime.UtcNow;
+            if (now.DayOfWeek == DayOfWeek.Saturday) return "Pzt 14:30 UTC açılır";
+            if (now.DayOfWeek == DayOfWeek.Sunday) return "Yarın 14:30 UTC açılır";
+            var t = TimeOnly.FromDateTime(now);
+            if (t < new TimeOnly(14, 30)) return $"{(int)Math.Ceiling((new TimeOnly(14,30) - t).TotalHours)}sa sonra açılır";
+            return now.DayOfWeek == DayOfWeek.Friday ? "Pzt 14:30 UTC açılır" : "Yarın 14:30 UTC açılır";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Changed += OnStoreChanged;
+        if (Store.Portfolios.Count == 0) await Store.RefreshAsync();
+        await LoadPositionOrderAsync();
+        await LoadIfNeeded();
+        StartPolling();
+    }
+
+    private async Task LoadPositionOrderAsync()
+    {
+        if (Store.SelectedId is null) return;
+        try
+        {
+            var key = $"portlite.positionOrder.{Store.SelectedId}";
+            var json = await Js.InvokeAsync<string?>("localStorage.getItem", key);
+            if (!string.IsNullOrEmpty(json))
+                _positionOrder = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? new();
+        }
+        catch { /* ignore */ }
+    }
+
+    private async Task SavePositionOrderAsync()
+    {
+        if (Store.SelectedId is null) return;
+        try
+        {
+            var key = $"portlite.positionOrder.{Store.SelectedId}";
+            var json = System.Text.Json.JsonSerializer.Serialize(_positionOrder);
+            await Js.InvokeVoidAsync("localStorage.setItem", key, json);
+        }
+        catch { /* ignore */ }
+    }
+
+    private void ApplyPositionOrder()
+    {
+        if (_positions is null || _positionOrder.Count == 0) return;
+        var orderMap = _positionOrder.Select((s, i) => (s, i)).ToDictionary(x => x.s, x => x.i);
+        _positions = _positions
+            .OrderBy(p => orderMap.TryGetValue(p.AssetSymbol, out var idx) ? idx : int.MaxValue)
+            .ThenBy(p => p.AssetSymbol)
+            .ToList();
+    }
+
+    private void ApplyOrdering()
+    {
+        if (_positions is null) return;
+        if (_sortBy is null) { ApplyPositionOrder(); return; }
+
+        Func<PositionDto, IComparable?> keySel = _sortBy switch
+        {
+            "symbol" => p => p.AssetSymbol,
+            "qty" => p => p.Quantity,
+            "cost" => p => p.AverageCost,
+            "price" => p => p.CurrentPrice ?? 0m,
+            "day" => p => p.DayChangePercent ?? 0m,
+            "value" => p => p.MarketValue ?? 0m,
+            "weight" => p => p.MarketValue ?? 0m,
+            "pnl" => p => p.UnrealizedPnL ?? 0m,
+            _ => p => p.AssetSymbol
+        };
+
+        _positions = (_sortDesc
+            ? _positions.OrderByDescending(keySel)
+            : _positions.OrderBy(keySel)).ToList();
+    }
+
+    private void ToggleSort(string col)
+    {
+        if (_sortBy == col)
+        {
+            // weight/value already start desc; toggle direction or clear on third click
+            if (!_sortDesc) { _sortBy = null; }
+            else _sortDesc = false;
+        }
+        else
+        {
+            _sortBy = col;
+            _sortDesc = true;
+        }
+        ApplyOrdering();
+        StateHasChanged();
+    }
+
+    private string SortClass(string col) =>
+        _sortBy == col ? "sortable sortable--active" : "sortable";
+
+    private MarkupString SortArrow(string col)
+    {
+        if (_sortBy != col) return new MarkupString("<span class=\"sort-arrow sort-arrow--idle\">▾</span>");
+        return new MarkupString(_sortDesc
+            ? "<span class=\"sort-arrow\">▾</span>"
+            : "<span class=\"sort-arrow\">▴</span>");
+    }
+
+    private void OnDragStart(string symbol) => _draggingSymbol = symbol;
+
+    private async Task OnDrop(string targetSymbol)
+    {
+        if (_draggingSymbol is null || _draggingSymbol == targetSymbol || _positions is null) return;
+        // Manual drag overrides any sort
+        _sortBy = null;
+        var symbols = _positions.Select(p => p.AssetSymbol).ToList();
+        symbols.Remove(_draggingSymbol);
+        var targetIdx = symbols.IndexOf(targetSymbol);
+        if (targetIdx < 0) return;
+        symbols.Insert(targetIdx, _draggingSymbol);
+        _positionOrder = symbols;
+        ApplyPositionOrder();
+        _draggingSymbol = null;
+        StateHasChanged();
+        await SavePositionOrderAsync();
+    }
+
+    private async void OnStoreChanged()
+    {
+        await LoadIfNeeded();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadIfNeeded()
+    {
+        if (Store.SelectedId is null) { _loading = false; return; }
+        if (_lastLoadedId == Store.SelectedId) return;
+        _lastLoadedId = Store.SelectedId;
+        await LoadAsync(initial: true);
+    }
+
+    private async Task LoadAsync(bool initial)
+    {
+        if (Store.SelectedId is null) return;
+        if (initial) _loading = true;
+        _error = null;
+        try
+        {
+            var id = Store.SelectedId.Value;
+            // Render with cached data immediately — fetch all read endpoints in parallel.
+            var snapsTask = Api.ListSnapshotsAsync(id);
+            var tradesTask = Api.ListTradesAsync(id);
+            var kpiTask = Api.GetKpisAsync(id);
+            var posTask = Api.ListPositionsAsync(id);
+            var spyTask = Api.GetPriceHistoryAsync("SPY");
+            await Task.WhenAll(snapsTask, tradesTask, kpiTask, posTask, spyTask);
+
+            var snaps = snapsTask.Result ?? new List<PortfolioSnapshotDto>();
+            var trades = tradesTask.Result ?? new List<TradeDto>();
+            _kpi = kpiTask.Result;
+            _positions = posTask.Result;
+            _trades = trades;
+            _snapshots = snaps;
+            _snapshot = snaps.LastOrDefault();
+
+            ApplyOrdering();
+            ApplyPriceFlash();
+            BuildPerformanceSeries(snaps, spyTask.Result ?? new List<PricePointDto>());
+
+            if (initial) _loading = false;
+            StateHasChanged();
+
+            // Trigger snapshot in background (non-blocking) so UI is responsive.
+            // When complete, refresh KPI/positions/snapshots in place.
+            if (trades.Count > 0)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await InvokeAsync(() => { _isRefreshing = true; StateHasChanged(); });
+                        await Api.CreateSnapshotAsync(id);
+                        await InvokeAsync(async () =>
+                        {
+                            var freshSnaps = await Api.ListSnapshotsAsync(id) ?? snaps;
+                            var freshKpi = await Api.GetKpisAsync(id);
+                            var freshPos = await Api.ListPositionsAsync(id);
+                            _snapshots = freshSnaps;
+                            _snapshot = freshSnaps.LastOrDefault();
+                            _kpi = freshKpi;
+                            _positions = freshPos;
+                            _lastUpdated = DateTime.UtcNow;
+                            ApplyOrdering();
+                            ApplyPriceFlash();
+                            BuildPerformanceSeries(freshSnaps, spyTask.Result ?? new List<PricePointDto>());
+                            StateHasChanged();
+                        });
+                    }
+                    catch { /* silent — UI already shows last known data */ }
+                    finally { await InvokeAsync(() => { _isRefreshing = false; StateHasChanged(); }); }
+                });
+            }
+        }
+        catch (Exception ex) when (initial)
+        {
+            _error = ex.Message;
+        }
+        catch
+        {
+            // silent on background polls
+        }
+        finally
+        {
+            if (initial) _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ManualRefreshAsync()
+    {
+        _isRefreshing = true;
+        StateHasChanged();
+        await LoadAsync(initial: false);
+    }
+
+    private void BuildPerformanceSeries(List<PortfolioSnapshotDto> snaps, List<PricePointDto> spy)
+    {
+        _perfSeries = new();
+        _benchmarkSeries = new();
+
+        var portfolioPoints = snaps
+            .OrderBy(s => s.Date)
+            .Select(s => new PerfPoint
+            {
+                Date = s.Date.ToDateTime(TimeOnly.MinValue),
+                Value = s.TotalEquity.Amount
+            })
+            .ToList();
+        if (portfolioPoints.Count == 0) return;
+
+        var baseValue = portfolioPoints[0].Value;
+        if (baseValue <= 0) return;
+        _perfSeries = portfolioPoints
+            .Select(p => new PerfPoint { Date = p.Date, Value = (p.Value - baseValue) / baseValue * 100m })
+            .ToList();
+
+        if (spy.Count == 0) return;
+
+        // Benchmark: align to portfolio's start date
+        var startDate = DateOnly.FromDateTime(portfolioPoints[0].Date);
+        var spyAligned = spy.Where(p => p.Date >= startDate).OrderBy(p => p.Date).ToList();
+        if (spyAligned.Count < 2) return;
+        var spyBase = spyAligned[0].Close;
+        if (spyBase <= 0) return;
+        _benchmarkSeries = spyAligned
+            .Select(p => new PerfPoint
+            {
+                Date = p.Date.ToDateTime(TimeOnly.MinValue),
+                Value = (p.Close - spyBase) / spyBase * 100m
+            })
+            .ToList();
+    }
+
+    private string FlashClass(string sym) =>
+        _flashState.TryGetValue(sym, out var c) ? c : "";
+
+    private string DirectionClass(string sym) =>
+        _lastDirection.TryGetValue(sym, out var d)
+            ? (d == "up" ? "tag-pos" : "tag-neg")
+            : "";
+
+    private void ApplyPriceFlash()
+    {
+        if (_positions is null) return;
+        var newFlash = new Dictionary<string, string>();
+        foreach (var p in _positions)
+        {
+            if (!p.CurrentPrice.HasValue) continue;
+            var sym = p.AssetSymbol;
+            var curr = p.CurrentPrice.Value;
+            if (_prevPrices.TryGetValue(sym, out var prev) && prev != curr)
+            {
+                var up = curr > prev;
+                _lastDirection[sym] = up ? "up" : "down";
+                newFlash[sym] = up ? "flash-up" : "flash-down";
+            }
+            _prevPrices[sym] = curr;
+        }
+        if (newFlash.Count == 0) return;
+
+        _flashState = newFlash;
+        _flashCts?.Cancel();
+        _flashCts = new CancellationTokenSource();
+        var token = _flashCts.Token;
+        _ = Task.Delay(1500, token).ContinueWith(async t =>
+        {
+            if (t.IsCanceled) return;
+            _flashState = new Dictionary<string, string>();
+            await InvokeAsync(StateHasChanged);
+        }, TaskScheduler.Default);
+    }
+
+    private void StartPolling()
+    {
+        _pollTimer?.Dispose();
+        _pollTimer = new System.Threading.Timer(async _ =>
+        {
+            if (Store.SelectedId is null) return;
+            if (!MarketIsOpen) return; // skip when market closed
+            try { await InvokeAsync(() => LoadAsync(initial: false)); } catch { }
+        }, null, TimeSpan.FromSeconds(PollIntervalSeconds), TimeSpan.FromSeconds(PollIntervalSeconds));
+    }
+
+    public void Dispose()
+    {
+        Store.Changed -= OnStoreChanged;
+        _pollTimer?.Dispose();
+        _flashCts?.Cancel();
+        _flashCts?.Dispose();
+    }
+}

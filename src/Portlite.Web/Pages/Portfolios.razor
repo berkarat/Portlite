@@ -1,0 +1,191 @@
+@page "/portfolios"
+@inject ApiClient Api
+@inject PortfolioStore Store
+@inject IJSRuntime JS
+
+<PageTitle>Portföyler — Portlite</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <div class="eyebrow">Yapı</div>
+        <h1 class="page-title">Portföyler</h1>
+    </div>
+    <div class="btn-row" style="margin-bottom:0;">
+        <button class="btn btn--primary" @onclick="OpenCreate">+ Yeni Portföy</button>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="alert alert--err">@_error</div> }
+
+<div class="panel">
+    @if (Store.Portfolios.Count == 0)
+    {
+        <div class="empty">Henüz alt portföy yok. "Yeni Portföy" ile başla.</div>
+    }
+    else
+    {
+        <table class="dt">
+            <thead>
+                <tr>
+                    <th>Kod</th>
+                    <th>İsim</th>
+                    <th>Açıklama</th>
+                    <th class="right">Sıra</th>
+                    <th class="right">Durum</th>
+                    <th class="right"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Store.Portfolios.OrderBy(x => x.DisplayOrder))
+                {
+                    <tr>
+                        <td><span class="ticker">@p.Code</span></td>
+                        <td>@p.Name</td>
+                        <td style="color:var(--text-tertiary);">@(p.Description ?? "—")</td>
+                        <td class="right num">@p.DisplayOrder</td>
+                        <td class="right">
+                            <span class="badge @(p.IsActive ? "badge--buy" : "")">@(p.IsActive ? "aktif" : "pasif")</span>
+                        </td>
+                        <td class="right">
+                            <button class="btn btn--ghost" @onclick="() => OpenEdit(p)">Düzenle</button>
+                            <button class="btn btn--danger" @onclick="() => DeleteAsync(p)">Sil</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<Modal IsOpen="@_modalOpen" Title="@(_editing is null ? "Yeni Portföy" : "Portföy Düzenle")" OnClose="Close">
+    <Body>
+        <div class="field">
+            <label>İsim</label>
+            <input @bind="_form.Name" placeholder="ör. 1 Yıl Tut ve Sus" />
+        </div>
+        <div class="field">
+            <label>Kod</label>
+            <input @bind="_form.Code" placeholder="P1" disabled="@(_editing is not null)" />
+        </div>
+        <div class="field">
+            <label>Açıklama (opsiyonel)</label>
+            <textarea @bind="_form.Description" rows="2"></textarea>
+        </div>
+        <div class="field--row">
+            <div class="field">
+                <label>Sıra</label>
+                <input type="number" @bind="_form.DisplayOrder" />
+            </div>
+            <div class="field">
+                <label>Durum</label>
+                <select @bind="_form.IsActive">
+                    <option value="true">Aktif</option>
+                    <option value="false">Pasif</option>
+                </select>
+            </div>
+        </div>
+        @if (_formError is not null) { <div class="field-error">@_formError</div> }
+    </Body>
+    <Footer>
+        <button class="btn btn--ghost" @onclick="Close">İptal</button>
+        <button class="btn btn--primary" @onclick="SaveAsync" disabled="@_saving">
+            @(_saving ? "Kaydediliyor…" : "Kaydet")
+        </button>
+    </Footer>
+</Modal>
+
+@code {
+    private string? _error;
+    private bool _modalOpen;
+    private SubPortfolioDto? _editing;
+    private bool _saving;
+    private string? _formError;
+
+    private FormModel _form = new();
+
+    private class FormModel
+    {
+        public string Name { get; set; } = "";
+        public string Code { get; set; } = "";
+        public string? Description { get; set; }
+        public int DisplayOrder { get; set; } = 1;
+        public bool IsActive { get; set; } = true;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { await Store.RefreshAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private void OpenCreate()
+    {
+        _editing = null;
+        _form = new FormModel { DisplayOrder = (Store.Portfolios.MaxBy(p => p.DisplayOrder)?.DisplayOrder ?? 0) + 1 };
+        _formError = null;
+        _modalOpen = true;
+    }
+
+    private void OpenEdit(SubPortfolioDto p)
+    {
+        _editing = p;
+        _form = new FormModel
+        {
+            Name = p.Name,
+            Code = p.Code,
+            Description = p.Description,
+            DisplayOrder = p.DisplayOrder,
+            IsActive = p.IsActive
+        };
+        _formError = null;
+        _modalOpen = true;
+    }
+
+    private void Close() => _modalOpen = false;
+
+    private async Task SaveAsync()
+    {
+        _formError = null; _saving = true; StateHasChanged();
+        try
+        {
+            if (_editing is null)
+            {
+                await Api.CreatePortfolioAsync(new CreateSubPortfolioRequest(
+                    _form.Name, _form.Code, _form.Description, _form.DisplayOrder));
+            }
+            else
+            {
+                await Api.UpdatePortfolioAsync(_editing.Id, new UpdateSubPortfolioRequest(
+                    _form.Name, _form.Description, _form.DisplayOrder, _form.IsActive));
+            }
+            _modalOpen = false;
+            await Store.RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _formError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteAsync(SubPortfolioDto p)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm",
+            $"\"{p.Name}\" portföyünü silmek istediğine emin misin?\n\nBu işlem geri alınamaz — portföye ait TÜM trade'ler, nakit hareketleri ve snapshot'lar da silinecek.");
+        if (!ok) return;
+
+        try
+        {
+            await Api.DeletePortfolioAsync(p.Id, force: true);
+            await Store.RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

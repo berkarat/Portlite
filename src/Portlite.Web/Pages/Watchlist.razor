@@ -1,0 +1,165 @@
+@page "/watchlist"
+@inject ApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>Watchlist — Portlite</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <div class="eyebrow">İzleme Listesi</div>
+        <h1 class="page-title">Watchlist</h1>
+    </div>
+    <div class="btn-row" style="margin-bottom:0;">
+        <button class="btn" @onclick="RefreshAsync" disabled="@_refreshing">@(_refreshing ? "Yenileniyor…" : "Fiyatları Yenile")</button>
+        <button class="btn btn--primary" @onclick="OpenAdd">+ Sembol Ekle</button>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="alert alert--err">@_error</div> }
+
+<div class="panel">
+    @if (_items is null)
+    {
+        <div class="panel__body--padded"><div class="skeleton" style="height:200px;"></div></div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="empty">Watchlist boş. Takip etmek istediğin sembolleri ekle.</div>
+    }
+    else
+    {
+        <table class="dt">
+            <thead>
+                <tr>
+                    <th>Sembol</th>
+                    <th>İsim</th>
+                    <th class="right">Güncel Fiyat</th>
+                    <th class="right">Önc. Kapanış</th>
+                    <th class="right">Bugün</th>
+                    <th>Not</th>
+                    <th class="right"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var w in _items)
+                {
+                    <tr>
+                        <td><span class="ticker">@w.Symbol</span></td>
+                        <td>@w.Name</td>
+                        <td class="right num">
+                            @if (w.CurrentPrice.HasValue)
+                            { @Format.Sign(w.Currency)@w.CurrentPrice.Value.ToString("N2") }
+                            else { <span class="tag-flat">—</span> }
+                        </td>
+                        <td class="right num">
+                            @if (w.PreviousClose.HasValue)
+                            { @Format.Sign(w.Currency)@w.PreviousClose.Value.ToString("N2") }
+                            else { <span class="tag-flat">—</span> }
+                        </td>
+                        <td class="right num @(w.DayChange.HasValue ? Format.DeltaClass(w.DayChange.Value) : "tag-flat")">
+                            @if (w.DayChange.HasValue)
+                            {
+                                var d = w.DayChange.Value;
+                                <div>@(d > 0 ? "+" : "")@Format.Sign(w.Currency)@Math.Abs(d).ToString("N2")</div>
+                                <div style="font-size:11px;">@Format.SignedPct(w.DayChangePercent)</div>
+                            }
+                            else { @("—") }
+                        </td>
+                        <td style="color:var(--text-tertiary);">@(w.Notes ?? "—")</td>
+                        <td class="right">
+                            <button class="btn btn--danger" @onclick="() => RemoveAsync(w)">Çıkar</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<Modal IsOpen="@_modalOpen" Title="Watchlist'e Sembol Ekle" OnClose="Close">
+    <Body>
+        <div class="field">
+            <label>Sembol</label>
+            <SymbolSearchInput Value="@_form.Symbol"
+                               ValueChanged="v => _form.Symbol = v"
+                               Placeholder="Sembol ara (örn. SPY, QQQ, NVDA)" />
+        </div>
+        <div class="field">
+            <label>Not (opsiyonel)</label>
+            <textarea rows="2" @bind="_form.Notes" placeholder="ör. Q1 raporu sonrası gir"></textarea>
+        </div>
+        @if (_formError is not null) { <div class="field-error">@_formError</div> }
+    </Body>
+    <Footer>
+        <button class="btn btn--ghost" @onclick="Close">İptal</button>
+        <button class="btn btn--primary" @onclick="SaveAsync" disabled="@(_saving || string.IsNullOrWhiteSpace(_form.Symbol))">
+            @(_saving ? "Ekleniyor…" : "Ekle")
+        </button>
+    </Footer>
+</Modal>
+
+@code {
+    private string? _error;
+    private List<WatchlistItemDto>? _items;
+    private bool _modalOpen;
+    private bool _saving;
+    private bool _refreshing;
+    private string? _formError;
+
+    private FormModel _form = new();
+
+    private class FormModel
+    {
+        public string Symbol { get; set; } = "";
+        public string? Notes { get; set; }
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try { _items = await Api.ListWatchlistAsync() ?? new(); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _refreshing = true; _error = null; StateHasChanged();
+        try { _items = await Api.RefreshWatchlistAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _refreshing = false; StateHasChanged(); }
+    }
+
+    private void OpenAdd()
+    {
+        _form = new FormModel();
+        _formError = null;
+        _modalOpen = true;
+    }
+    private void Close() => _modalOpen = false;
+
+    private async Task SaveAsync()
+    {
+        _formError = null; _saving = true; StateHasChanged();
+        try
+        {
+            await Api.AddWatchlistAsync(_form.Symbol, _form.Notes);
+            _modalOpen = false;
+            await LoadAsync();
+        }
+        catch (Exception ex) { _formError = ex.Message; }
+        finally { _saving = false; StateHasChanged(); }
+    }
+
+    private async Task RemoveAsync(WatchlistItemDto w)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", $"\"{w.Symbol}\" watchlist'ten çıkarılsın mı?");
+        if (!ok) return;
+        try
+        {
+            await Api.RemoveWatchlistAsync(w.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+}

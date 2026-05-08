@@ -1,0 +1,163 @@
+@page "/hesap"
+@inject ApiClient Api
+@inject PortfolioStore Store
+@implements IDisposable
+
+<PageTitle>Yatırım Hesabı — Portlite</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <div class="eyebrow">Hesap</div>
+        <h1 class="page-title">Yatırım Hesabı</h1>
+    </div>
+</div>
+
+<PortfolioChips />
+
+@if (Store.Selected is null)
+{
+    <div class="empty">Bir alt portföy seç.</div>
+}
+else if (_snapshot is null && _loading)
+{
+    <div class="panel"><div class="panel__body--padded"><div class="skeleton" style="height:280px;"></div></div></div>
+}
+else if (_snapshot is null)
+{
+    <div class="empty">Henüz snapshot yok. Dashboard'da pozisyon ekledikten sonra burası dolar.</div>
+}
+else
+{
+    <div class="panel hesap-card">
+        <div class="panel__body--padded">
+            <div class="hesap-top">
+                <div class="hesap-top__left">
+                    <div class="eyebrow">Toplam Varlık</div>
+                    <div class="hesap-total num">@Format.Money(_snapshot.TotalEquity)</div>
+                </div>
+            </div>
+
+            <div class="hesap-split-row">
+                <div class="hesap-split-list">
+                    <div class="hesap-split-item">
+                        <span class="hesap-split-item__dot dot--stocks"></span>
+                        <span class="hesap-split-item__lbl">Hisseler</span>
+                        <span class="hesap-split-item__val num">@Format.Money(_snapshot.MarketValue)</span>
+                    </div>
+                    <div class="hesap-split-item">
+                        <span class="hesap-split-item__dot dot--cash"></span>
+                        <span class="hesap-split-item__lbl">USD Nakit</span>
+                        <span class="hesap-split-item__val num">@Format.Money(_snapshot.CashBalance)</span>
+                    </div>
+                </div>
+
+                @if (_donut.Count > 0)
+                {
+                    <div class="hesap-donut-wrap">
+                        <RadzenChart Style="width:200px;height:200px;">
+                            <RadzenDonutSeries Data="@_donut"
+                                               CategoryProperty="Label"
+                                               ValueProperty="Value"
+                                               TItem="DonutSlice" />
+                            <RadzenLegend Visible="false" />
+                        </RadzenChart>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="panel hesap-rows">
+        <div class="hesap-row">
+            <div class="hesap-row__lbl">Alım gücü</div>
+            <div class="hesap-row__val num">@Format.Money(_snapshot.CashBalance)</div>
+        </div>
+        <div class="hesap-row">
+            <div class="hesap-row__lbl">Nakit bakiye</div>
+            <div class="hesap-row__val num">@Format.Money(_snapshot.CashBalance)</div>
+        </div>
+        <div class="hesap-row">
+            <div class="hesap-row__lbl">Toplam yatırılan</div>
+            <div class="hesap-row__val num">@(_kpi is null ? "—" : Format.Money(_kpi.NetCashContributed))</div>
+        </div>
+        <div class="hesap-row">
+            <div class="hesap-row__lbl">All-time PnL</div>
+            <div class="hesap-row__val num @Format.DeltaClass(_snapshot.UnrealizedPnL.Amount + _snapshot.RealizedPnL.Amount)">
+                @{ var pnl = _snapshot.UnrealizedPnL.Amount + _snapshot.RealizedPnL.Amount; }
+                @(pnl > 0 ? "+" : "")@Format.Sign(_snapshot.TotalEquity.Currency)@Math.Abs(pnl).ToString("N2")
+                @if (_kpi?.AllTimePnLPercent is not null)
+                {
+                    <span class="hesap-row__pct">· @Format.SignedPct(_kpi.AllTimePnLPercent)</span>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private PortfolioSnapshotDto? _snapshot;
+    private KpiSummaryDto? _kpi;
+    private Guid? _lastLoadedId;
+    private List<DonutSlice> _donut = new();
+
+    public class DonutSlice
+    {
+        public string Label { get; set; } = "";
+        public decimal Value { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Changed += OnStoreChanged;
+        if (Store.Portfolios.Count == 0) await Store.RefreshAsync();
+        await LoadIfNeeded();
+    }
+
+    private async void OnStoreChanged()
+    {
+        await LoadIfNeeded();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadIfNeeded()
+    {
+        if (Store.SelectedId is null) { _loading = false; return; }
+        if (_lastLoadedId == Store.SelectedId) return;
+        _lastLoadedId = Store.SelectedId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Store.SelectedId is null) return;
+        _loading = true;
+        try
+        {
+            var id = Store.SelectedId.Value;
+            var snapsTask = Api.ListSnapshotsAsync(id);
+            var kpiTask = Api.GetKpisAsync(id);
+            await Task.WhenAll(snapsTask, kpiTask);
+            _snapshot = (snapsTask.Result ?? new()).LastOrDefault();
+            _kpi = kpiTask.Result;
+            BuildDonut();
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void BuildDonut()
+    {
+        _donut = new();
+        if (_snapshot is null) return;
+        if (_snapshot.MarketValue.Amount > 0)
+            _donut.Add(new DonutSlice { Label = "Hisseler", Value = _snapshot.MarketValue.Amount });
+        if (_snapshot.CashBalance.Amount > 0)
+            _donut.Add(new DonutSlice { Label = "USD Nakit", Value = _snapshot.CashBalance.Amount });
+    }
+
+    public void Dispose() => Store.Changed -= OnStoreChanged;
+}

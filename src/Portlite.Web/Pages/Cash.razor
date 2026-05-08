@@ -1,0 +1,201 @@
+@page "/cash"
+@inject ApiClient Api
+@inject PortfolioStore Store
+@implements IDisposable
+
+<PageTitle>Nakit — Portlite</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <div class="eyebrow">Defter</div>
+        <h1 class="page-title">Nakit Akışı</h1>
+    </div>
+    <div class="btn-row" style="margin-bottom:0;">
+        <button class="btn btn--primary" @onclick="OpenCreate" disabled="@(Store.SelectedId is null)">+ Yeni Hareket</button>
+    </div>
+</div>
+
+<PortfolioChips />
+
+@if (_error is not null) { <div class="alert alert--err">@_error</div> }
+
+<div class="panel">
+    @if (Store.Selected is null)
+    {
+        <div class="empty">Bir alt portföy seç.</div>
+    }
+    else if (_items is null)
+    {
+        <div class="panel__body--padded"><div class="skeleton" style="height:200px;"></div></div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="empty">@Store.Selected.Name için nakit hareketi yok.</div>
+    }
+    else
+    {
+        <table class="dt">
+            <thead>
+                <tr>
+                    <th>Tarih</th>
+                    <th>Tip</th>
+                    <th>Referans</th>
+                    <th class="right">Tutar</th>
+                    <th>Not</th>
+                    <th class="right"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in _items)
+                {
+                    var sign = (c.Type == CashTxType.Deposit || c.Type == CashTxType.Dividend || c.Type == CashTxType.Interest) ? 1m : -1m;
+                    var signed = sign * c.Amount.Amount;
+                    <tr>
+                        <td class="num">@Format.ShortDate(c.OccurredAt)</td>
+                        <td><span class="badge">@c.Type</span></td>
+                        <td style="color:var(--text-tertiary);">@(c.Reference ?? "—")</td>
+                        <td class="right num @Format.DeltaClass(signed)">
+                            @(signed > 0 ? "+" : "")@Format.Sign(c.Amount.Currency)@Math.Abs(signed).ToString("N2")
+                        </td>
+                        <td style="color:var(--text-tertiary);">@(c.Notes ?? "—")</td>
+                        <td class="right">
+                            <button class="btn btn--danger" @onclick="() => DeleteAsync(c)">Sil</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<Modal IsOpen="@_modalOpen" Title="Yeni Nakit Hareketi" OnClose="Close">
+    <Body>
+        <div class="field--row">
+            <div class="field">
+                <label>Tip</label>
+                <select @bind="_form.Type">
+                    <option value="@CashTxType.Deposit">Deposit (Yatırım)</option>
+                    <option value="@CashTxType.Withdraw">Withdraw (Çekiş)</option>
+                    <option value="@CashTxType.Dividend">Dividend (Temettü)</option>
+                    <option value="@CashTxType.Interest">Interest (Faiz)</option>
+                    <option value="@CashTxType.Fee">Fee (Ücret)</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Para Birimi</label>
+                <select @bind="_form.Currency">
+                    <option value="@CurrencyCode.USD">USD</option>
+                    <option value="@CurrencyCode.TRY">TRY</option>
+                </select>
+            </div>
+        </div>
+        <div class="field--row">
+            <div class="field">
+                <label>Tutar</label>
+                <input type="number" step="0.01" @bind="_form.Amount" />
+            </div>
+            <div class="field">
+                <label>Tarih (UTC)</label>
+                <input type="datetime-local" @bind="_form.OccurredAt" />
+            </div>
+        </div>
+        <div class="field">
+            <label>Referans (opsiyonel)</label>
+            <input @bind="_form.Reference" placeholder="ör. AAPL Q1 dividend" />
+        </div>
+        <div class="field">
+            <label>Not (opsiyonel)</label>
+            <textarea rows="2" @bind="_form.Notes"></textarea>
+        </div>
+        @if (_formError is not null) { <div class="field-error">@_formError</div> }
+    </Body>
+    <Footer>
+        <button class="btn btn--ghost" @onclick="Close">İptal</button>
+        <button class="btn btn--primary" @onclick="SaveAsync" disabled="@_saving">@(_saving ? "Kaydediliyor…" : "Kaydet")</button>
+    </Footer>
+</Modal>
+
+@code {
+    private string? _error;
+    private List<CashTransactionDto>? _items;
+    private bool _modalOpen;
+    private bool _saving;
+    private string? _formError;
+    private Guid? _lastLoadedId;
+
+    private FormModel _form = new();
+
+    private class FormModel
+    {
+        public CashTxType Type { get; set; } = CashTxType.Deposit;
+        public CurrencyCode Currency { get; set; } = CurrencyCode.USD;
+        public decimal Amount { get; set; }
+        public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
+        public string? Reference { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Changed += OnStoreChanged;
+        if (Store.Portfolios.Count == 0) await Store.RefreshAsync();
+        await LoadIfNeeded();
+    }
+
+    private async void OnStoreChanged()
+    {
+        await LoadIfNeeded();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadIfNeeded()
+    {
+        if (Store.SelectedId is null) return;
+        if (_lastLoadedId == Store.SelectedId) return;
+        _lastLoadedId = Store.SelectedId;
+        try { _items = await Api.ListCashAsync(Store.SelectedId.Value); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private void OpenCreate()
+    {
+        _form = new FormModel();
+        _formError = null;
+        _modalOpen = true;
+    }
+    private void Close() => _modalOpen = false;
+
+    private async Task SaveAsync()
+    {
+        _formError = null; _saving = true; StateHasChanged();
+        try
+        {
+            await Api.CreateCashAsync(Store.SelectedId!.Value, new CreateCashTransactionRequest(
+                _form.Type,
+                new MoneyDto(_form.Amount, _form.Currency),
+                DateTime.SpecifyKind(_form.OccurredAt, DateTimeKind.Utc),
+                _form.Reference, _form.Notes));
+            _modalOpen = false;
+            _lastLoadedId = null;
+            await LoadIfNeeded();
+        }
+        catch (Exception ex)
+        {
+            _formError = ex.Message;
+        }
+        finally { _saving = false; StateHasChanged(); }
+    }
+
+    private async Task DeleteAsync(CashTransactionDto c)
+    {
+        try
+        {
+            await Api.DeleteCashAsync(c.Id);
+            _lastLoadedId = null;
+            await LoadIfNeeded();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    public void Dispose() => Store.Changed -= OnStoreChanged;
+}

@@ -1,0 +1,96 @@
+@inject ApiClient Api
+@implements IDisposable
+
+<div class="panel news-panel">
+    <div class="panel__head">
+        <div>
+            <div class="section-title">Haberler</div>
+            <div class="eyebrow">Portföyündeki sembollerden son 7 gün</div>
+        </div>
+        <a href="haberler" class="btn btn--ghost">Hepsi →</a>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="panel__body--padded">
+            @for (var i = 0; i < 3; i++)
+            {
+                <div class="skeleton" style="height:54px;margin-bottom:10px;border-radius:6px;"></div>
+            }
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="panel__body--padded"><div class="alert alert--err">@_error</div></div>
+    }
+    else if (_items is null || _items.Count == 0)
+    {
+        <div class="empty" style="padding:24px 0;">Henüz haber yok</div>
+    }
+    else
+    {
+        <ul class="news-list">
+            @foreach (var n in _items.Take(6))
+            {
+                <li class="news-item">
+                    <a href="@n.Url" target="_blank" rel="noopener" class="news-item__link">
+                        <div class="news-item__head">
+                            <span class="news-item__sym">@n.Symbol</span>
+                            <span class="news-item__time">@RelativeTime(n.PublishedAt)</span>
+                        </div>
+                        <div class="news-item__headline">@n.Headline</div>
+                        <div class="news-item__source">@n.Source</div>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? PortfolioId { get; set; }
+
+    private bool _loading = true;
+    private string? _error;
+    private List<NewsItemDto>? _items;
+    private Guid? _lastLoadedId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (PortfolioId is null) { _loading = false; return; }
+        if (_lastLoadedId == PortfolioId) return;
+        _lastLoadedId = PortfolioId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (PortfolioId is null) return;
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = await Api.GetPortfolioNewsAsync(PortfolioId.Value, days: 7, take: 30);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string RelativeTime(DateTime utc)
+    {
+        var diff = DateTime.UtcNow - utc;
+        if (diff.TotalMinutes < 1) return "şimdi";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}dk";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}sa";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}g";
+        return utc.ToLocalTime().ToString("dd MMM");
+    }
+
+    public void Dispose() { }
+}

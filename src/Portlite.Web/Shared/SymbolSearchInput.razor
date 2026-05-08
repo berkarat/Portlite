@@ -1,0 +1,113 @@
+@inject ApiClient Api
+
+<div class="sym-search">
+    <RadzenDropDownDataGrid TValue="string"
+                            Data="@_results"
+                            Value="@Value"
+                            ValueChanged="OnSelected"
+                            ValueProperty="Symbol"
+                            TextProperty="Symbol"
+                            AllowFiltering="true"
+                            AllowClear="true"
+                            FilterAsYouType="true"
+                            FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                            LoadData="OnLoadData"
+                            Placeholder="@Placeholder"
+                            PageSize="10"
+                            Style="width:100%;"
+                            Class="rz-portlite-search">
+        <Columns>
+            <RadzenDropDownDataGridColumn Property="Symbol" Title="Sembol" Width="90px">
+                <Template Context="row">
+                    <span class="ticker">@(((SymbolSearchHitDto)row).Symbol)</span>
+                </Template>
+            </RadzenDropDownDataGridColumn>
+            <RadzenDropDownDataGridColumn Property="Description" Title="İsim">
+                <Template Context="row">
+                    @(((SymbolSearchHitDto)row).Description)
+                </Template>
+            </RadzenDropDownDataGridColumn>
+            <RadzenDropDownDataGridColumn Property="Type" Title="Tür" Width="110px">
+                <Template Context="row">
+                    <span class="sym-search__row-type">@(((SymbolSearchHitDto)row).Type)</span>
+                </Template>
+            </RadzenDropDownDataGridColumn>
+        </Columns>
+    </RadzenDropDownDataGrid>
+
+    @if (_isResolving)
+    {
+        <div class="sym-search__hint">Sembol kaydediliyor…</div>
+    }
+    else if (_resolvedAsset is not null)
+    {
+        <div class="sym-search__resolved">
+            <span class="ticker">@_resolvedAsset.Symbol</span>
+            <span class="sym-search__resolved-name">@_resolvedAsset.Name</span>
+        </div>
+    }
+    @if (_error is not null)
+    {
+        <div class="sym-search__row--err sym-search__hint">@_error</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public EventCallback<AssetDto> OnAssetResolved { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Sembol ara (örn. NVDA, MSFT)";
+
+    private List<SymbolSearchHitDto> _results = new();
+    private bool _isResolving;
+    private string? _error;
+    private AssetDto? _resolvedAsset;
+
+    private async Task OnLoadData(LoadDataArgs args)
+    {
+        var query = args.Filter;
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _results = new();
+            return;
+        }
+        try
+        {
+            var hits = await Api.SearchSymbolsAsync(query);
+            _results = hits ?? new();
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _results = new();
+        }
+    }
+
+    private async Task OnSelected(string symbol)
+    {
+        _resolvedAsset = null;
+        _error = null;
+        await ValueChanged.InvokeAsync(symbol);
+
+        if (string.IsNullOrWhiteSpace(symbol)) return;
+
+        _isResolving = true;
+        StateHasChanged();
+        try
+        {
+            var asset = await Api.LookupAssetAsync(symbol);
+            _resolvedAsset = asset;
+            if (OnAssetResolved.HasDelegate) await OnAssetResolved.InvokeAsync(asset);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _isResolving = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,114 @@
+@using Portlite.Shared.Dtos
+@inject ApiClient Api
+
+<Modal IsOpen="@IsOpen" Title="Portföy AI Analizi" Width="720" OnClose="OnClose">
+    <Body>
+        @if (_loading)
+        {
+            <div class="empty" style="padding:40px 0;">
+                <div class="skeleton" style="height:18px;width:60%;margin:0 auto 12px;"></div>
+                <div class="skeleton" style="height:14px;width:40%;margin:0 auto;"></div>
+                <div style="text-align:center;margin-top:16px;color:var(--text-tertiary);font-size:12px;">
+                    Analiz ediliyor… (~5 sn)
+                </div>
+            </div>
+        }
+        else if (_error is not null)
+        {
+            <div class="alert alert--err">@_error</div>
+        }
+        else if (_result is not null)
+        {
+            <div class="ai-meta">
+                @if (_result.FromCache) { <span class="chip-currency">💾 cache</span> }
+                <span class="eyebrow">@Format.ShortDate(_result.GeneratedAt) · @(_result.GeneratedAt.ToLocalTime().ToString("HH:mm"))</span>
+                <button class="btn btn--ghost" @onclick="() => RunAsync(forceRefresh: true)">Yeniden çalıştır</button>
+            </div>
+
+            <div class="ai-section">
+                <div class="eyebrow">Özet</div>
+                <div class="ai-summary">@_result.Summary</div>
+            </div>
+
+            @if (_result.Warnings.Count > 0)
+            {
+                <div class="ai-section">
+                    <div class="eyebrow">Uyarılar (@_result.Warnings.Count)</div>
+                    <div class="ai-list">
+                        @foreach (var w in _result.Warnings)
+                        {
+                            <div class="ai-item ai-item--@(w.Severity.ToLowerInvariant())">
+                                <div class="ai-item__title">@w.Title</div>
+                                <div class="ai-item__detail">@w.Detail</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (_result.Suggestions.Count > 0)
+            {
+                <div class="ai-section">
+                    <div class="eyebrow">Öneriler (@_result.Suggestions.Count)</div>
+                    <div class="ai-list">
+                        @foreach (var s in _result.Suggestions)
+                        {
+                            <div class="ai-item ai-item--sugg ai-item--@(s.Priority.ToLowerInvariant())">
+                                <div class="ai-item__title">@s.Action</div>
+                                <div class="ai-item__detail">@s.Reasoning</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="ai-section ai-section--context">
+                <div class="eyebrow">Piyasa context</div>
+                <div class="ai-context">@_result.MarketContext</div>
+            </div>
+        }
+    </Body>
+</Modal>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Guid? PortfolioId { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool _loading;
+    private string? _error;
+    private PortfolioAnalysisDto? _result;
+    private Guid? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && PortfolioId.HasValue && PortfolioId != _loadedFor)
+        {
+            _loadedFor = PortfolioId;
+            await RunAsync(forceRefresh: false);
+        }
+        if (!IsOpen) _loadedFor = null;
+    }
+
+    private async Task RunAsync(bool forceRefresh)
+    {
+        if (PortfolioId is null) return;
+        _loading = true;
+        _error = null;
+        _result = null;
+        StateHasChanged();
+        try
+        {
+            _result = await Api.AnalyzePortfolioAsync(PortfolioId.Value, forceRefresh);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Analiz yapılamadı: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+}

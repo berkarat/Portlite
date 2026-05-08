@@ -1,0 +1,77 @@
+# ---- Build outputs ----
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Dd]ebugPublic/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+# ---- IDE / editor ----
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.[Pp]ublish.xml
+
+# ---- ASP.NET / EF ----
+*.publishsettings
+**/Properties/PublishProfiles/
+**/wwwroot/dist/
+
+# ---- Test artefacts ----
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+coverage*.json
+*.coverage
+*.coveragexml
+
+# ---- NuGet ----
+*.nuget.props
+*.nuget.targets
+project.lock.json
+artifacts/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ---- AI tooling local config ----
+**/.claude/settings.local.json
+**/.cursor/
+**/.windsurf/
+**/CLAUDE.md
+**/GEMINI.md
+**/AGENTS.md
+docs/superpowers/
+
+# ---- Local DB / dumps ----
+*.mdf
+*.ldf
+*.bak
+*.sql
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+local.settings.json
+
+# ---- Environment / secrets ----
+.env
+.env.*
+secrets.json
+appsettings.*.local.json
+appsettings.Production.json

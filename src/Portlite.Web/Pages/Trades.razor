@@ -1,0 +1,353 @@
+@page "/trades"
+@inject ApiClient Api
+@inject PortfolioStore Store
+@implements IDisposable
+
+<PageTitle>İşlemler — Portlite</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <div class="eyebrow">Defter</div>
+        <h1 class="page-title">İşlemler</h1>
+    </div>
+    <div class="btn-row" style="margin-bottom:0;">
+        <button class="btn btn--primary" @onclick="OpenCreate" disabled="@(Store.SelectedId is null)">+ Yeni İşlem</button>
+    </div>
+</div>
+
+<PortfolioChips />
+
+@if (_error is not null) { <div class="alert alert--err">@_error</div> }
+
+<div class="panel">
+    @if (Store.Selected is null)
+    {
+        <div class="empty">Bir alt portföy seç.</div>
+    }
+    else if (_trades is null)
+    {
+        <div class="panel__body--padded"><div class="skeleton" style="height:200px;"></div></div>
+    }
+    else if (_trades.Count == 0)
+    {
+        <div class="empty">@Store.Selected.Name için işlem yok.</div>
+    }
+    else
+    {
+        <table class="dt">
+            <thead>
+                <tr>
+                    <th>Tarih</th>
+                    <th>Sembol</th>
+                    <th>Yön</th>
+                    <th class="right">Adet</th>
+                    <th class="right">Birim Fiyat</th>
+                    <th class="right">Komisyon</th>
+                    <th class="right">Toplam</th>
+                    <th>Not</th>
+                    <th class="right"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in _trades)
+                {
+                    <tr>
+                        <td class="num">@Format.ShortDate(t.ExecutedAt)</td>
+                        <td><span class="ticker">@t.AssetSymbol</span></td>
+                        <td><span class="badge @(t.Side == TradeSide.Buy ? "badge--buy" : "badge--sell")">@t.Side</span></td>
+                        <td class="right num">@Format.Qty(t.Quantity)</td>
+                        <td class="right num">$@t.Price.ToString("N2")</td>
+                        <td class="right num">$@t.Fee.ToString("N2")</td>
+                        <td class="right num">$@((t.Quantity * t.Price + t.Fee).ToString("N2"))</td>
+                        <td style="color:var(--text-tertiary);">@(t.Notes ?? "—")</td>
+                        <td class="right">
+                            <button class="btn btn--danger" @onclick="() => DeleteAsync(t)">Sil</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<Modal IsOpen="@_modalOpen" Title="Yeni İşlem" OnClose="Close" Width="640">
+    <Body>
+        <div class="trade-modal">
+            <div class="field">
+                <label>Sembol</label>
+                <SymbolSearchInput Value="@_form.AssetSymbol"
+                                   ValueChanged="v => _form.AssetSymbol = v"
+                                   OnAssetResolved="OnAssetResolved" />
+            </div>
+
+            @if (_isLoadingQuote)
+            {
+                <div class="quote-card quote-card--loading">
+                    <div class="skeleton" style="height:60px;"></div>
+                </div>
+            }
+            else if (_quote is not null)
+            {
+                <div class="quote-card">
+                    <div class="quote-card__head">
+                        <div class="quote-card__symbol">@_quote.Symbol</div>
+                        <div class="quote-card__source">@_quote.Source · @_quote.Timestamp.ToLocalTime().ToString("HH:mm")</div>
+                    </div>
+                    <div class="quote-card__price-row">
+                        <div class="quote-card__price">@Format.Sign(_quote.Currency)@_quote.Current.ToString("N2")</div>
+                        <div class="quote-card__delta @Format.DeltaClass(_quote.Change)">
+                            @Format.Signed(_quote.Change, _quote.Currency)
+                            <span class="quote-card__pct">(@Format.SignedPct(_quote.ChangePercent))</span>
+                        </div>
+                    </div>
+                    <div class="quote-card__stats">
+                        <div class="quote-stat"><span class="quote-stat__lbl">Önc. Kapanış</span><span class="quote-stat__val num">$@_quote.PreviousClose.ToString("N2")</span></div>
+                        @if (_quote.DayOpen.HasValue)
+                        { <div class="quote-stat"><span class="quote-stat__lbl">Açılış</span><span class="quote-stat__val num">$@_quote.DayOpen.Value.ToString("N2")</span></div> }
+                        @if (_quote.DayHigh.HasValue)
+                        { <div class="quote-stat"><span class="quote-stat__lbl">G. Yüksek</span><span class="quote-stat__val num">$@_quote.DayHigh.Value.ToString("N2")</span></div> }
+                        @if (_quote.DayLow.HasValue)
+                        { <div class="quote-stat"><span class="quote-stat__lbl">G. Düşük</span><span class="quote-stat__val num">$@_quote.DayLow.Value.ToString("N2")</span></div> }
+                    </div>
+                </div>
+            }
+
+            @if (_currentPosition is not null && _currentPosition.Quantity > 0)
+            {
+                <div class="info-line">
+                    <span class="info-line__label">Mevcut pozisyon</span>
+                    <span class="info-line__val num">
+                        @Format.Qty(_currentPosition.Quantity) adet · ort. maliyet $@_currentPosition.AverageCost.ToString("N2")
+                    </span>
+                </div>
+            }
+
+            <div class="field--row">
+                <div class="field">
+                    <label>Yön</label>
+                    <select @bind="_form.Side">
+                        <option value="@TradeSide.Buy">Alış</option>
+                        <option value="@TradeSide.Sell">Satış</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Adet <span class="field__hint">kaç hisse</span></label>
+                    <input type="number" step="0.0001" min="0" @bind="_form.Quantity" />
+                </div>
+            </div>
+
+            <div class="field--row">
+                <div class="field">
+                    <label>
+                        Birim Fiyat <span class="field__hint">hisse başı</span>
+                        @if (_quote is not null)
+                        {
+                            <button type="button" class="link-btn" @onclick="UseLivePrice">şimdiki fiyatla doldur</button>
+                        }
+                    </label>
+                    <div class="input-with-prefix">
+                        <span class="input-prefix">$</span>
+                        <input type="number" step="0.0001" min="0" @bind="_form.Price" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Komisyon <span class="field__hint">broker ücreti</span></label>
+                    <div class="input-with-prefix">
+                        <span class="input-prefix">$</span>
+                        <input type="number" step="0.01" min="0" @bind="_form.Fee" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>Tarih / Saat (UTC)</label>
+                <input type="datetime-local" @bind="_form.ExecutedAt" />
+            </div>
+
+            <div class="field">
+                <label>Not (opsiyonel)</label>
+                <textarea rows="2" @bind="_form.Notes"></textarea>
+            </div>
+
+            <div class="trade-summary">
+                <div class="trade-summary__row">
+                    <span class="trade-summary__lbl">İşlem tutarı</span>
+                    <span class="trade-summary__val num">$@Notional.ToString("N2")</span>
+                </div>
+                <div class="trade-summary__row">
+                    <span class="trade-summary__lbl">+ komisyon</span>
+                    <span class="trade-summary__val num">$@_form.Fee.ToString("N2")</span>
+                </div>
+                <div class="trade-summary__row trade-summary__row--total">
+                    <span class="trade-summary__lbl">@(_form.Side == TradeSide.Buy ? "Toplam maliyet" : "Net gelir")</span>
+                    <span class="trade-summary__val num">
+                        @(_form.Side == TradeSide.Buy ? "−" : "+")$@TotalSigned.ToString("N2")
+                    </span>
+                </div>
+            </div>
+
+            @if (PositionWarning is not null)
+            {
+                <div class="alert alert--err" style="margin-top:0;">@PositionWarning</div>
+            }
+
+            @if (_formError is not null) { <div class="field-error">@_formError</div> }
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn btn--ghost" @onclick="Close">İptal</button>
+        <button class="btn btn--primary" @onclick="SaveAsync" disabled="@(_saving || !CanSubmit)">
+            @(_saving ? "Kaydediliyor…" : "Kaydet")
+        </button>
+    </Footer>
+</Modal>
+
+@code {
+    private string? _error;
+    private List<TradeDto>? _trades;
+    private List<PositionDto>? _positions;
+    private QuoteDto? _quote;
+    private PositionDto? _currentPosition;
+    private bool _isLoadingQuote;
+
+    private bool _modalOpen;
+    private bool _saving;
+    private string? _formError;
+    private Guid? _lastLoadedId;
+
+    private FormModel _form = new();
+
+    private decimal Notional => _form.Quantity * _form.Price;
+    private decimal TotalSigned => Notional + _form.Fee;
+
+    private bool CanSubmit =>
+        !string.IsNullOrWhiteSpace(_form.AssetSymbol)
+        && _form.Quantity > 0
+        && _form.Price >= 0;
+
+    private string? PositionWarning
+    {
+        get
+        {
+            if (_form.Side != TradeSide.Sell) return null;
+            if (_form.Quantity <= 0) return null;
+            if (_currentPosition is null || _currentPosition.Quantity == 0)
+                return "Bu sembolde hiç pozisyon yok; satış yapamazsın.";
+            if (_form.Quantity > _currentPosition.Quantity)
+                return $"Yetersiz pozisyon. Satılmaya çalışılan: {_form.Quantity:N4} adet, mevcut: {_currentPosition.Quantity:N4} adet.";
+            return null;
+        }
+    }
+
+    private class FormModel
+    {
+        public string AssetSymbol { get; set; } = "";
+        public TradeSide Side { get; set; } = TradeSide.Buy;
+        public decimal Quantity { get; set; }
+        public decimal Price { get; set; }
+        public decimal Fee { get; set; }
+        public DateTime ExecutedAt { get; set; } = DateTime.UtcNow;
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Changed += OnStoreChanged;
+        if (Store.Portfolios.Count == 0) await Store.RefreshAsync();
+        await LoadIfNeeded();
+    }
+
+    private async void OnStoreChanged()
+    {
+        await LoadIfNeeded();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadIfNeeded()
+    {
+        if (Store.SelectedId is null) return;
+        if (_lastLoadedId == Store.SelectedId) return;
+        _lastLoadedId = Store.SelectedId;
+        try
+        {
+            var id = Store.SelectedId.Value;
+            var tradesTask = Api.ListTradesAsync(id);
+            var posTask = Api.ListPositionsAsync(id);
+            await Task.WhenAll(tradesTask, posTask);
+            _trades = tradesTask.Result;
+            _positions = posTask.Result;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private void OpenCreate()
+    {
+        _form = new FormModel();
+        _formError = null;
+        _quote = null;
+        _currentPosition = null;
+        _modalOpen = true;
+    }
+    private void Close() => _modalOpen = false;
+
+    private async Task OnAssetResolved(AssetDto asset)
+    {
+        _form.AssetSymbol = asset.Symbol;
+        _currentPosition = _positions?.FirstOrDefault(p => p.AssetSymbol == asset.Symbol);
+        _quote = null;
+        _isLoadingQuote = true;
+        StateHasChanged();
+        try
+        {
+            _quote = await Api.GetQuoteAsync(asset.Symbol);
+            // Auto-fill price if empty
+            if (_form.Price == 0 && _quote is not null) _form.Price = _quote.Current;
+        }
+        catch (Exception ex)
+        {
+            _formError = $"Fiyat alınamadı: {ex.Message}";
+        }
+        finally
+        {
+            _isLoadingQuote = false;
+            StateHasChanged();
+        }
+    }
+
+    private void UseLivePrice()
+    {
+        if (_quote is not null) _form.Price = _quote.Current;
+    }
+
+    private async Task SaveAsync()
+    {
+        _formError = null; _saving = true; StateHasChanged();
+        try
+        {
+            await Api.CreateTradeAsync(Store.SelectedId!.Value, new CreateTradeRequest(
+                _form.AssetSymbol, _form.Side, _form.Quantity, _form.Price, _form.Fee,
+                DateTime.SpecifyKind(_form.ExecutedAt, DateTimeKind.Utc), _form.Notes));
+            _modalOpen = false;
+            _lastLoadedId = null;
+            await LoadIfNeeded();
+        }
+        catch (Exception ex)
+        {
+            _formError = ex.Message;
+        }
+        finally { _saving = false; StateHasChanged(); }
+    }
+
+    private async Task DeleteAsync(TradeDto t)
+    {
+        try
+        {
+            await Api.DeleteTradeAsync(t.Id);
+            _lastLoadedId = null;
+            await LoadIfNeeded();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    public void Dispose() => Store.Changed -= OnStoreChanged;
+}

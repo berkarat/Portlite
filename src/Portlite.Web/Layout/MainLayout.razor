@@ -1,0 +1,24 @@
+@inherits LayoutComponentBase
+
+<div class="shell">
+    <header class="topbar">
+        <a href="" class="topbar__brand">Portlite<sup>v0.1</sup></a>
+        <nav class="topbar__nav">
+            <NavLink href="" Match="NavLinkMatch.All">Dashboard</NavLink>
+            <NavLink href="hesap">Hesap</NavLink>
+            <NavLink href="portfolios">Portföyler</NavLink>
+            <NavLink href="trades">İşlemler</NavLink>
+            <NavLink href="cash">Nakit</NavLink>
+            <NavLink href="watchlist">Watchlist</NavLink>
+            <NavLink href="haberler">Haberler</NavLink>
+            <NavLink href="assets">Varlık Kataloğu</NavLink>
+        </nav>
+        <div class="topbar__meta">
+            <span>@DateTime.Now.ToString("dd MMM yyyy")</span> · <span>@DateTime.Now.ToString("HH:mm")</span> TRT
+        </div>
+    </header>
+
+    <main class="main">
+        @Body
+    </main>
+</div>
