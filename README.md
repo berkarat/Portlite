@@ -1,6 +1,6 @@
 # Portlite
 
-Personal portfolio dashboard — mirrors a Midas brokerage account, with live prices, daily snapshots, AI-powered portfolio analysis, and a news feed scoped to held symbols.
+Personal portfolio dashboard for tracking US equities — live prices, daily snapshots, AI-powered portfolio analysis, and a company news feed scoped to held symbols.
 
 **Stack:** .NET 8 · Blazor WASM · EF Core 8 · Azure SQL · Finnhub · Azure AI Foundry
 
