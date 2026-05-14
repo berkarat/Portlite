@@ -70,9 +70,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
 app.UseCors(BlazorCorsPolicy);
 
 app.UseAuthorization();
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 app.Run();

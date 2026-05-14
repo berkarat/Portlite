@@ -75,3 +75,10 @@ local.settings.json
 secrets.json
 appsettings.*.local.json
 appsettings.Production.json
+
+# ---- Personal portfolio data ----
+data/
+
+# ---- Local publish artefacts (deploy via CI, not committed) ----
+src/Portlite.Api/publish/
+src/Portlite.Api/app.zip
