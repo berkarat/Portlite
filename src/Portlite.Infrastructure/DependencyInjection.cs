@@ -38,6 +38,15 @@ public static class DependencyInjection
         // INewsProvider shares the same FinnhubPriceProvider instance via DI scope.
         services.AddScoped<INewsProvider>(sp => (FinnhubPriceProvider)sp.GetRequiredService<IPriceProvider>());
 
+        // FMP Historical Price Provider
+        services.Configure<FmpOptions>(configuration.GetSection(FmpOptions.SectionName));
+        services.AddHttpClient<IHistoricalPriceProvider, FmpHistoricalPriceProvider>((sp, client) =>
+        {
+            var opts = configuration.GetSection(FmpOptions.SectionName).Get<FmpOptions>() ?? new FmpOptions();
+            client.BaseAddress = new Uri(opts.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(30);
+        }).AddStandardResilienceHandler();
+
         return services;
     }
 }

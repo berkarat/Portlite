@@ -26,6 +26,9 @@
         <button class="btn" @onclick="ManualRefreshAsync" disabled="@_isRefreshing">
             @(_isRefreshing ? "Yenileniyor…" : "Yenile")
         </button>
+        <button class="btn" @onclick="ToggleHidePrices" title="Fiyatları gizle/göster">
+            @(_hidePrices ? "👁" : "👁‍🗨")
+        </button>
     </div>
 </div>
 
@@ -68,54 +71,82 @@ else
         </div>
     }
 
-    <div class="hero-grid">
-        <div class="panel hero-card">
-            <div class="hero-card__head">
-                <div class="eyebrow">Toplam Portföy</div>
-                <span class="chip-currency">USD</span>
+    <!-- TOPLAM PORTFÖY -->
+    <div class="panel" style="padding:24px 28px; margin-bottom:20px;">
+        <div class="eyebrow" style="margin-bottom:8px;">TOPLAM PORTFÖY</div>
+        @if (_kpi is null)
+        {
+            <div class="hero-card__big">—</div>
+        }
+        else
+        {
+            <div class="hero-card__big num">@Mask("$" + _kpi.TotalEquity.Amount.ToString("N0"))</div>
+            <div style="margin-top:12px; display:inline-flex; align-items:center; gap:12px; padding:8px 14px; border-radius:var(--radius-sm); border:1px solid @(IntradayChange >= 0 ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"); background:@(IntradayChange >= 0 ? "var(--gain-bg)" : "var(--loss-bg)");">
+                <span class="num" style="font-size:14px; font-weight:600; color:@(IntradayChange >= 0 ? "var(--gain)" : "var(--loss)");">
+                    BUGÜN @Mask((IntradayChange >= 0 ? "+" : "") + "$" + Math.Abs(IntradayChange).ToString("N0")) · @Format.SignedPct(IntradayChangePct)
+                </span>
+                @if (_spyDayPct.HasValue || _qqqDayPct.HasValue)
+                {
+                    <span style="font-size:11px; color:var(--text-tertiary);">
+                        @if (_spyDayPct.HasValue) { <text>· SPX @Format.SignedPct(_spyDayPct)</text> }
+                        @if (_qqqDayPct.HasValue) { <text> · NDX @Format.SignedPct(_qqqDayPct)</text> }
+                    </span>
+                }
             </div>
-            @if (_kpi is null)
-            {
-                <div class="hero-card__big">—</div>
-            }
-            else
-            {
-                <div class="hero-card__big num">$@_kpi.TotalEquity.Amount.ToString("N2")</div>
+            <div style="margin-top:12px; font-size:12px; color:var(--text-tertiary);">
+                Başlangıç <strong class="num" style="color:var(--text-secondary);">@Mask(Format.Money(_kpi.NetCashContributed))</strong>
                 @if (_snapshot is not null)
                 {
-                    <div class="hero-card__split">
-                        <div class="hero-split">
-                            <span class="hero-split__lbl">Hisseler</span>
-                            <span class="hero-split__val num">@Format.Money(_snapshot.MarketValue)</span>
-                        </div>
-                        <div class="hero-split">
-                            <span class="hero-split__lbl">Kullanılabilir Cash</span>
-                            <span class="hero-split__val num">@Format.Money(_snapshot.CashBalance)</span>
-                        </div>
-                    </div>
+                    <text> · Önc. kapanış <strong class="num" style="color:var(--text-secondary);">@Mask("$" + (_kpi.TotalEquity.Amount - IntradayChange).ToString("N0"))</strong></text>
                 }
-                <div class="hero-card__cash">
-                    Yatırılan <strong class="num">@Format.Money(_kpi.NetCashContributed)</strong> · @Format.ShortDate(_kpi.AsOf)
+            </div>
+        }
+    </div>
+
+    <!-- KPI KARTLARI: Hafta, MTD, YTD, All Time -->
+    @if (_kpi is not null)
+    {
+        <div class="kpi-grid" style="margin-bottom:24px;">
+            <div class="kpi">
+                <div class="kpi__label"><span class="kpi__label-text">HAFTA (SON 5 İŞLEM GÜNÜ)</span></div>
+                <div class="kpi__value @Format.DeltaClassPct(WeekReturnPct)">@Format.SignedPct(WeekReturnPct)</div>
+                <div class="kpi__sub num">
+                    @if (WeekReturnAmount != 0) { <text>@(WeekReturnAmount > 0 ? "+" : "")$@Math.Abs(WeekReturnAmount).ToString("N0")</text> }
+                    @if (_spyWeekPct.HasValue) { <text> · SPX @Format.SignedPct(_spyWeekPct)</text> }
+                    @if (_qqqWeekPct.HasValue) { <text> · NDX @Format.SignedPct(_qqqWeekPct)</text> }
                 </div>
-                <div class="hero-card__returns">
-                    <div class="ret">
-                        <div class="ret__val @Format.DeltaClass(IntradayChange)">
-                            @(IntradayChange > 0 ? "+" : "")$@Math.Abs(IntradayChange).ToString("N2")
-                            <span class="ret__pct">@Format.SignedPct(IntradayChangePct)</span>
-                        </div>
-                        <div class="ret__lbl">Bugün</div>
-                    </div>
-                    <div class="ret">
-                        <div class="ret__val @Format.DeltaClassPct(ThirtyDayReturnPct)">@Format.SignedPct(ThirtyDayReturnPct)</div>
-                        <div class="ret__lbl">30 Gün</div>
-                    </div>
-                    <div class="ret">
-                        <div class="ret__val @Format.DeltaClassPct(_kpi.AllTimePnLPercent)">@Format.SignedPct(_kpi.AllTimePnLPercent)</div>
-                        <div class="ret__lbl">Toplam</div>
-                    </div>
+            </div>
+            <div class="kpi">
+                <div class="kpi__label"><span class="kpi__label-text">MTD · @DateTime.Now.ToString("MMMM", _trCulture).ToUpper()</span></div>
+                <div class="kpi__value @Format.DeltaClassPct(MtdReturnPct)">@Format.SignedPct(MtdReturnPct)</div>
+                <div class="kpi__sub num">
+                    @if (MtdReturnAmount != 0) { <text>@(MtdReturnAmount > 0 ? "+" : "")$@Math.Abs(MtdReturnAmount).ToString("N0")</text> }
+                    @if (_spyMtdPct.HasValue) { <text> · SPX @Format.SignedPct(_spyMtdPct)</text> }
+                    @if (_qqqMtdPct.HasValue) { <text> · NDX @Format.SignedPct(_qqqMtdPct)</text> }
                 </div>
-            }
+            </div>
+            <div class="kpi">
+                <div class="kpi__label"><span class="kpi__label-text">YTD @DateTime.Now.Year</span></div>
+                <div class="kpi__value @Format.DeltaClassPct(_kpi.YtdChangePercent)">@Format.SignedPct(_kpi.YtdChangePercent)</div>
+                <div class="kpi__sub num">
+                    @((_kpi.YtdChange.Amount > 0 ? "+" : "") + "$" + Math.Abs(_kpi.YtdChange.Amount).ToString("N0"))
+                    @if (_spyYtdPct.HasValue) { <text> · SPX @Format.SignedPct(_spyYtdPct)</text> }
+                    @if (_qqqYtdPct.HasValue) { <text> · NDX @Format.SignedPct(_qqqYtdPct)</text> }
+                </div>
+            </div>
+            <div class="kpi">
+                <div class="kpi__label"><span class="kpi__label-text">ALL TIME</span></div>
+                <div class="kpi__value @Format.DeltaClassPct(_kpi.AllTimePnLPercent)">@Format.SignedPct(_kpi.AllTimePnLPercent)</div>
+                <div class="kpi__sub num">
+                    @((_kpi.AllTimePnL.Amount > 0 ? "+" : "") + "$" + Math.Abs(_kpi.AllTimePnL.Amount).ToString("N0"))
+                    @if (_spyAllTimePct.HasValue) { <text> · SPX @Format.SignedPct(_spyAllTimePct)</text> }
+                    @if (_qqqAllTimePct.HasValue) { <text> · NDX @Format.SignedPct(_qqqAllTimePct)</text> }
+                </div>
+            </div>
         </div>
+    }
+
+    <div class="hero-grid" style="grid-template-columns: 1fr 1.6fr;">
 
         <div class="panel hero-movers">
             @{ var movers = TopMovers; }
@@ -284,7 +315,7 @@ else
                             </td>
                             <td class="right num">
                                 @if (p.MarketValue.HasValue)
-                                { @Format.Sign(p.Currency)@p.MarketValue.Value.ToString("N2") }
+                                { @Mask(Format.Sign(p.Currency) + p.MarketValue.Value.ToString("N2")) }
                                 else { <span class="tag-flat">—</span> }
                             </td>
                             <td class="right num @(p.UnrealizedPnL.HasValue ? Format.DeltaClass(p.UnrealizedPnL.Value) : "tag-flat")">
@@ -292,7 +323,7 @@ else
                                 {
                                     var u = p.UnrealizedPnL.Value;
                                     var pct = p.TotalCost > 0 ? (decimal?)(u / p.TotalCost * 100m) : null;
-                                    <div>@(u > 0 ? "+" : "")@Format.Sign(p.Currency)@Math.Abs(u).ToString("N2")</div>
+                                    <div>@Mask((u > 0 ? "+" : "") + Format.Sign(p.Currency) + Math.Abs(u).ToString("N2"))</div>
                                     <div style="font-size:11px;">@Format.SignedPct(pct)</div>
                                 }
                                 else { @("—") }
@@ -428,6 +459,7 @@ else
 
 @code {
     private bool _loading = true;
+    private bool _hidePrices;
     private bool _aiOpen;
     private bool _isRefreshing;
     private string? _error;
@@ -463,6 +495,76 @@ else
 
     private List<PerfPoint> _perfSeries = new();
     private List<PerfPoint> _benchmarkSeries = new();
+    private List<PerfPoint> _qqqBenchmarkSeries = new();
+
+    // Benchmark return percentages
+    private List<PricePointDto> _spyHistory = new();
+    private List<PricePointDto> _qqqHistory = new();
+    private decimal? _spyDayPct;
+    private decimal? _qqqDayPct;
+    private decimal? _spyWeekPct;
+    private decimal? _qqqWeekPct;
+    private decimal? _spyMtdPct;
+    private decimal? _qqqMtdPct;
+    private decimal? _spyYtdPct;
+    private decimal? _qqqYtdPct;
+    private decimal? _spyAllTimePct;
+    private decimal? _qqqAllTimePct;
+
+    // Portfolio period returns
+    private decimal? WeekReturnPct
+    {
+        get
+        {
+            if (_snapshots.Count < 2) return null;
+            var latest = _snapshots[^1];
+            var threshold = latest.Date.AddDays(-7);
+            var anchor = _snapshots.FirstOrDefault(s => s.Date >= threshold && s.Date < latest.Date);
+            if (anchor is null) return null;
+            var prev = anchor.TotalEquity.Amount;
+            return prev > 0 ? (latest.TotalEquity.Amount - prev) / prev * 100m : null;
+        }
+    }
+
+    private decimal WeekReturnAmount
+    {
+        get
+        {
+            if (_snapshots.Count < 2) return 0;
+            var latest = _snapshots[^1];
+            var threshold = latest.Date.AddDays(-7);
+            var anchor = _snapshots.FirstOrDefault(s => s.Date >= threshold && s.Date < latest.Date);
+            if (anchor is null) return 0;
+            return latest.TotalEquity.Amount - anchor.TotalEquity.Amount;
+        }
+    }
+
+    private decimal? MtdReturnPct
+    {
+        get
+        {
+            if (_snapshots.Count < 2) return null;
+            var latest = _snapshots[^1];
+            var monthStart = new DateOnly(latest.Date.Year, latest.Date.Month, 1);
+            var anchor = _snapshots.FirstOrDefault(s => s.Date >= monthStart && s.Date < latest.Date);
+            if (anchor is null) return null;
+            var prev = anchor.TotalEquity.Amount;
+            return prev > 0 ? (latest.TotalEquity.Amount - prev) / prev * 100m : null;
+        }
+    }
+
+    private decimal MtdReturnAmount
+    {
+        get
+        {
+            if (_snapshots.Count < 2) return 0;
+            var latest = _snapshots[^1];
+            var monthStart = new DateOnly(latest.Date.Year, latest.Date.Month, 1);
+            var anchor = _snapshots.FirstOrDefault(s => s.Date >= monthStart && s.Date < latest.Date);
+            if (anchor is null) return 0;
+            return latest.TotalEquity.Amount - anchor.TotalEquity.Amount;
+        }
+    }
 
     private Dictionary<string, decimal> _prevPrices = new();
     private Dictionary<string, string> _lastDirection = new(); // sym -> "up"/"down" (persists)
@@ -555,17 +657,23 @@ else
 
     private static readonly System.Globalization.CultureInfo _trCulture = new("tr-TR");
 
+    private static readonly TimeZoneInfo _eastern = GetEasternTimeZone();
+
+    private static TimeZoneInfo GetEasternTimeZone()
+    {
+        try { return TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"); }
+        catch { return TimeZoneInfo.FindSystemTimeZoneById("America/New_York"); }
+    }
+
     private bool MarketIsOpen
     {
         get
         {
-            // US equities: Mon-Fri, 14:30-21:00 UTC (09:30-16:00 ET, no DST handling)
-            var now = DateTime.UtcNow;
-            if (now.DayOfWeek == DayOfWeek.Saturday || now.DayOfWeek == DayOfWeek.Sunday) return false;
-            var open = new TimeOnly(14, 30);
-            var close = new TimeOnly(21, 0);
-            var t = TimeOnly.FromDateTime(now);
-            return t >= open && t < close;
+            // US equities: Mon-Fri, 09:30-16:00 Eastern (handles DST automatically)
+            var et = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _eastern);
+            if (et.DayOfWeek == DayOfWeek.Saturday || et.DayOfWeek == DayOfWeek.Sunday) return false;
+            var t = TimeOnly.FromDateTime(et);
+            return t >= new TimeOnly(9, 30) && t < new TimeOnly(16, 0);
         }
     }
 
@@ -573,13 +681,22 @@ else
     {
         get
         {
-            if (MarketIsOpen) return "14:30–21:00 UTC";
-            var now = DateTime.UtcNow;
-            if (now.DayOfWeek == DayOfWeek.Saturday) return "Pzt 14:30 UTC açılır";
-            if (now.DayOfWeek == DayOfWeek.Sunday) return "Yarın 14:30 UTC açılır";
-            var t = TimeOnly.FromDateTime(now);
-            if (t < new TimeOnly(14, 30)) return $"{(int)Math.Ceiling((new TimeOnly(14,30) - t).TotalHours)}sa sonra açılır";
-            return now.DayOfWeek == DayOfWeek.Friday ? "Pzt 14:30 UTC açılır" : "Yarın 14:30 UTC açılır";
+            if (MarketIsOpen)
+            {
+                var et = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _eastern);
+                var remaining = new TimeOnly(16, 0) - TimeOnly.FromDateTime(et);
+                return $"Kapanışa {remaining.Hours}sa {remaining.Minutes}dk";
+            }
+            var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _eastern);
+            if (now.DayOfWeek == DayOfWeek.Saturday) return "Pzt 09:30 ET açılır";
+            if (now.DayOfWeek == DayOfWeek.Sunday) return "Yarın 09:30 ET açılır";
+            var time = TimeOnly.FromDateTime(now);
+            if (time < new TimeOnly(9, 30))
+            {
+                var diff = new TimeOnly(9, 30) - time;
+                return $"{diff.Hours}sa {diff.Minutes}dk sonra açılır";
+            }
+            return now.DayOfWeek == DayOfWeek.Friday ? "Pzt 09:30 ET açılır" : "Yarın 09:30 ET açılır";
         }
     }
 
@@ -725,7 +842,8 @@ else
             var kpiTask = Api.GetKpisAsync(id);
             var posTask = Api.ListPositionsAsync(id);
             var spyTask = Api.GetPriceHistoryAsync("SPY");
-            await Task.WhenAll(snapsTask, tradesTask, kpiTask, posTask, spyTask);
+            var qqqTask = Api.GetPriceHistoryAsync("QQQ");
+            await Task.WhenAll(snapsTask, tradesTask, kpiTask, posTask, spyTask, qqqTask);
 
             var snaps = snapsTask.Result ?? new List<PortfolioSnapshotDto>();
             var trades = tradesTask.Result ?? new List<TradeDto>();
@@ -734,10 +852,13 @@ else
             _trades = trades;
             _snapshots = snaps;
             _snapshot = snaps.LastOrDefault();
+            _spyHistory = spyTask.Result ?? new List<PricePointDto>();
+            _qqqHistory = qqqTask.Result ?? new List<PricePointDto>();
 
             ApplyOrdering();
             ApplyPriceFlash();
-            BuildPerformanceSeries(snaps, spyTask.Result ?? new List<PricePointDto>());
+            BuildPerformanceSeries(snaps, _spyHistory);
+            ComputeBenchmarkReturns();
 
             if (initial) _loading = false;
             StateHasChanged();
@@ -795,6 +916,14 @@ else
         await LoadAsync(initial: false);
     }
 
+    private void ToggleHidePrices()
+    {
+        _hidePrices = !_hidePrices;
+        StateHasChanged();
+    }
+
+    private string Mask(string value) => _hidePrices ? "•••••" : value;
+
     private void BuildPerformanceSeries(List<PortfolioSnapshotDto> snaps, List<PricePointDto> spy)
     {
         _perfSeries = new();
@@ -831,6 +960,65 @@ else
                 Value = (p.Close - spyBase) / spyBase * 100m
             })
             .ToList();
+    }
+
+    private void ComputeBenchmarkReturns()
+    {
+        _spyDayPct = ComputePeriodReturn(_spyHistory, 1);
+        _qqqDayPct = ComputePeriodReturn(_qqqHistory, 1);
+        _spyWeekPct = ComputePeriodReturn(_spyHistory, 5);
+        _qqqWeekPct = ComputePeriodReturn(_qqqHistory, 5);
+        _spyMtdPct = ComputeMtdReturn(_spyHistory);
+        _qqqMtdPct = ComputeMtdReturn(_qqqHistory);
+        _spyYtdPct = ComputeYtdReturn(_spyHistory);
+        _qqqYtdPct = ComputeYtdReturn(_qqqHistory);
+        _spyAllTimePct = ComputeAllTimeReturn(_spyHistory);
+        _qqqAllTimePct = ComputeAllTimeReturn(_qqqHistory);
+    }
+
+    private static decimal? ComputePeriodReturn(List<PricePointDto> history, int daysBack)
+    {
+        if (history.Count < 2) return null;
+        var sorted = history.OrderBy(p => p.Date).ToList();
+        var latest = sorted[^1];
+        var idx = sorted.Count - 1 - daysBack;
+        if (idx < 0) idx = 0;
+        var anchor = sorted[idx];
+        if (anchor.Close <= 0) return null;
+        return (latest.Close - anchor.Close) / anchor.Close * 100m;
+    }
+
+    private static decimal? ComputeMtdReturn(List<PricePointDto> history)
+    {
+        if (history.Count < 2) return null;
+        var sorted = history.OrderBy(p => p.Date).ToList();
+        var latest = sorted[^1];
+        var monthStart = new DateOnly(latest.Date.Year, latest.Date.Month, 1);
+        var anchor = sorted.FirstOrDefault(p => p.Date >= monthStart);
+        if (anchor is null || anchor.Close <= 0 || anchor.Date == latest.Date) return null;
+        return (latest.Close - anchor.Close) / anchor.Close * 100m;
+    }
+
+    private static decimal? ComputeYtdReturn(List<PricePointDto> history)
+    {
+        if (history.Count < 2) return null;
+        var sorted = history.OrderBy(p => p.Date).ToList();
+        var latest = sorted[^1];
+        var jan1 = new DateOnly(latest.Date.Year, 1, 1);
+        var anchor = sorted.FirstOrDefault(p => p.Date >= jan1);
+        if (anchor is null || anchor.Close <= 0 || anchor.Date == latest.Date) return null;
+        return (latest.Close - anchor.Close) / anchor.Close * 100m;
+    }
+
+    private decimal? ComputeAllTimeReturn(List<PricePointDto> history)
+    {
+        if (history.Count < 2 || _snapshots.Count == 0) return null;
+        var sorted = history.OrderBy(p => p.Date).ToList();
+        var latest = sorted[^1];
+        var portfolioStart = _snapshots[0].Date;
+        var anchor = sorted.FirstOrDefault(p => p.Date >= portfolioStart);
+        if (anchor is null || anchor.Close <= 0 || anchor.Date == latest.Date) return null;
+        return (latest.Close - anchor.Close) / anchor.Close * 100m;
     }
 
     private string FlashClass(string sym) =>

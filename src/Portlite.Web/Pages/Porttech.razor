@@ -1,0 +1,392 @@
+@page "/porttech"
+@inject ApiClient Api
+@inject PortfolioStore Store
+@implements IDisposable
+
+<PageTitle>Portlite — Porttech</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <h1 class="page-title">Porttech Raporları</h1>
+        <div class="eyebrow">Günlük portföy teknik analizi — RSI, SMA, TC Skoru</div>
+    </div>
+    <div class="btn-row" style="margin-bottom:0; gap:10px; align-items:center;">
+        @if (_history is { Count: > 0 })
+        {
+            <select class="porttech-date-select" @onchange="OnDateChanged">
+                @foreach (var r in _history)
+                {
+                    <option value="@r.Id" selected="@(r.Id == _selectedReport?.Id)">
+                        @r.ReportDate.ToString("yyyy-MM-dd") · @r.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                    </option>
+                }
+            </select>
+        }
+        <button class="btn btn--accent" @onclick="GenerateAsync" disabled="@_generating">
+            @(_generating ? "Üretiliyor…" : "⬢ Yeni Rapor Üret")
+        </button>
+    </div>
+</div>
+
+<PortfolioChips />
+
+@if (Store.Selected is null)
+{
+    <div class="empty">Bir alt portföy seç.</div>
+}
+else if (_loading)
+{
+    <div class="panel"><div class="panel__body--padded"><div class="skeleton" style="height:400px;"></div></div></div>
+}
+else if (_selectedReport is null)
+{
+    <div class="panel">
+        <div class="panel__body--padded" style="text-align:center; padding:60px 20px;">
+            <h2 style="color:var(--text-secondary); margin-bottom:12px;">Henüz rapor yok</h2>
+            <p style="color:var(--text-muted);">İlk teknik analiz raporunu üretmek için yukarıdaki butonu kullan.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="porttech-report">
+        @* Executive Summary *@
+        <div class="panel porttech-summary">
+            <div class="panel__body--padded">
+                <h2 class="porttech-section-title">Porttech · Portföy Teknik Analiz</h2>
+                <div class="porttech-meta">
+                    @_selectedReport.ReportDate.ToString("dd MMMM yyyy", _trCulture) · 
+                    @_selectedReport.CreatedAt.ToLocalTime().ToString("HH:mm") ·
+                    @(_parsedReport?.PositionSummary?.Count ?? 0) pozisyon
+                </div>
+                @if (!string.IsNullOrEmpty(_parsedReport?.ExecutiveSummary))
+                {
+                    <div class="porttech-exec-summary">@_parsedReport.ExecutiveSummary</div>
+                }
+            </div>
+        </div>
+
+        @* Exec Grid *@
+        @if (_parsedReport?.ExecGrid is not null)
+        {
+            <h3 class="porttech-section-title" style="margin-top:24px;">Yönetici Özeti (Exec Grid)</h3>
+            <div class="porttech-exec-grid">
+                <div class="porttech-grid-card porttech-grid-card--red">
+                    <div class="porttech-grid-num">@_parsedReport.ExecGrid.RsiOverboughtCount</div>
+                    <div class="porttech-grid-label">RSI ≥ 70</div>
+                    <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.RsiOverboughtSymbols ?? [])</div>
+                </div>
+                <div class="porttech-grid-card porttech-grid-card--green">
+                    <div class="porttech-grid-num">@_parsedReport.ExecGrid.Near52hCount</div>
+                    <div class="porttech-grid-label">52H Zirve ±5%</div>
+                    <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.Near52hSymbols ?? [])</div>
+                </div>
+                <div class="porttech-grid-card porttech-grid-card--orange">
+                    <div class="porttech-grid-num">@_parsedReport.ExecGrid.Below200maCount</div>
+                    <div class="porttech-grid-label">200MA Altı</div>
+                    <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.Below200maSymbols ?? [])</div>
+                </div>
+                <div class="porttech-grid-card porttech-grid-card--red">
+                    <div class="porttech-grid-num">@_parsedReport.ExecGrid.TcBelow40Count</div>
+                    <div class="porttech-grid-label">TC &lt; 40 (Bitmiş)</div>
+                    <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.TcBelow40Symbols ?? [])</div>
+                </div>
+                <div class="porttech-grid-card porttech-grid-card--blue">
+                    <div class="porttech-grid-num">@_parsedReport.ExecGrid.TcAbove85Count</div>
+                    <div class="porttech-grid-label">TC ≥ 85 (Güçlü)</div>
+                    <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.TcAbove85Symbols ?? [])</div>
+                </div>
+            </div>
+        }
+
+        @* Alerts *@
+        @if (_parsedReport?.Alerts is { Count: > 0 })
+        {
+            <h3 class="porttech-section-title" style="margin-top:24px;">🚨 Kritik Uyarılar</h3>
+            <div class="porttech-alerts">
+                @foreach (var alert in _parsedReport.Alerts)
+                {
+                    <div class="porttech-alert porttech-alert--@alert.Severity">
+                        <div class="porttech-alert__badge">@SeverityLabel(alert.Severity)</div>
+                        <div class="porttech-alert__symbol">@alert.Symbol</div>
+                        <div class="porttech-alert__msg">@alert.Message</div>
+                    </div>
+                }
+            </div>
+        }
+
+        @* Actions Table *@
+        @if (_parsedReport?.Actions is { Count: > 0 })
+        {
+            <h3 class="porttech-section-title" style="margin-top:24px;">📋 Önerilen Aksiyon Tablosu</h3>
+            <div class="panel" style="overflow-x:auto;">
+                <table class="dt">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th>Aksiyon</th>
+                            <th>Gerekçe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _parsedReport.Actions)
+                        {
+                            <tr>
+                                <td><strong>@a.Symbol</strong></td>
+                                <td><span class="porttech-action-badge @ActionClass(a.Action)">@a.Action</span></td>
+                                <td class="porttech-reasoning">@a.Reasoning</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @* Position Summary Table *@
+        @if (_parsedReport?.PositionSummary is { Count: > 0 })
+        {
+            <h3 class="porttech-section-title" style="margin-top:24px;">📊 Pozisyon Özeti</h3>
+            <div class="panel" style="overflow-x:auto;">
+                <table class="dt">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th>Fiyat</th>
+                            <th>Maliyet</th>
+                            <th>Bugün %</th>
+                            <th>P&amp;L %</th>
+                            <th>TC Skor</th>
+                            <th>TC Etiket</th>
+                            <th>RSI</th>
+                            <th>50MA</th>
+                            <th>200MA</th>
+                            <th>52H</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _parsedReport.PositionSummary.OrderByDescending(x => x.TcScore))
+                        {
+                            <tr>
+                                <td><strong>@p.Symbol</strong></td>
+                                <td>$@p.CurrentPrice.ToString("N2")</td>
+                                <td>$@p.AvgCost.ToString("N2")</td>
+                                <td class="@DeltaClass(p.DayChangePct)">@FormatPct(p.DayChangePct)</td>
+                                <td class="@DeltaClass(p.PnlPct)">@FormatPct(p.PnlPct)</td>
+                                <td><span class="porttech-tc @TcClass(p.TcScore)">@p.TcScore</span></td>
+                                <td>@p.TcLabel</td>
+                                <td>@p.Rsi.ToString("N1")</td>
+                                <td>@FormatMa(p.Sma50)</td>
+                                <td>@FormatMa(p.Sma200)</td>
+                                <td>@FormatMa(p.High52w)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @* Token usage *@
+        <div class="porttech-footer">
+            Token: @_selectedReport.InputTokens in / @_selectedReport.OutputTokens out
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo _trCulture = new("tr-TR");
+
+    private bool _loading;
+    private bool _generating;
+    private List<PorttechReportDto>? _history;
+    private PorttechReportDto? _selectedReport;
+    private ParsedPorttechReport? _parsedReport;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Changed += OnStoreChanged;
+        if (Store.Portfolios.Count == 0)
+            await Store.RefreshAsync();
+        else
+            await LoadAsync();
+    }
+
+    private async void OnStoreChanged()
+    {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Store.SelectedId is null) return;
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            _history = await Api.GetPorttechHistoryAsync(Store.SelectedId.Value, 20);
+            _selectedReport = _history?.FirstOrDefault();
+            ParseReport();
+        }
+        catch { _history = null; _selectedReport = null; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (Store.SelectedId is null) return;
+        _generating = true;
+        StateHasChanged();
+
+        try
+        {
+            _selectedReport = await Api.GeneratePorttechAsync(Store.SelectedId.Value);
+            _history = await Api.GetPorttechHistoryAsync(Store.SelectedId.Value, 20);
+            ParseReport();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Porttech generate error: {ex.Message}");
+        }
+        finally { _generating = false; StateHasChanged(); }
+    }
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (e.Value is string idStr && Guid.TryParse(idStr, out var id))
+        {
+            _selectedReport = _history?.FirstOrDefault(r => r.Id == id);
+            ParseReport();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ParseReport()
+    {
+        if (_selectedReport is null || string.IsNullOrEmpty(_selectedReport.ReportJson))
+        {
+            _parsedReport = null;
+            return;
+        }
+        try
+        {
+            _parsedReport = System.Text.Json.JsonSerializer.Deserialize<ParsedPorttechReport>(
+                _selectedReport.ReportJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        }
+        catch { _parsedReport = null; }
+    }
+
+    private static string SeverityLabel(string s) => s switch
+    {
+        "kritik" => "Kritik",
+        "uyari" => "Uyarı",
+        "bilgi" => "Bilgi",
+        "firsat" => "Fırsat",
+        _ => s
+    };
+
+    private static string ActionClass(string a) => a switch
+    {
+        _ when a.Contains("STOP") => "action--red",
+        _ when a.Contains("HOLD") => "action--green",
+        _ when a.Contains("İZLE") => "action--blue",
+        _ when a.Contains("AZALT") => "action--orange",
+        _ => ""
+    };
+
+    private static string DeltaClass(decimal v) => v > 0 ? "tag-pos" : v < 0 ? "tag-neg" : "";
+    private static string FormatPct(decimal v) => $"{(v > 0 ? "+" : "")}{v:N2}%";
+    private static string FormatMa(decimal v) => v > 0 ? $"${v:N2}" : "—";
+    private static string TcClass(int score) => score >= 85 ? "tc--strong" : score >= 60 ? "tc--healthy" : score >= 40 ? "tc--weak" : "tc--dead";
+
+    public void Dispose() => Store.Changed -= OnStoreChanged;
+
+    // JSON model for AI report
+    private class ParsedPorttechReport
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("executive_summary")]
+        public string? ExecutiveSummary { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("exec_grid")]
+        public ExecGridModel? ExecGrid { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("alerts")]
+        public List<AlertModel>? Alerts { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("actions")]
+        public List<ActionModel>? Actions { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("position_summary")]
+        public List<PositionSummaryModel>? PositionSummary { get; set; }
+    }
+
+    private class ExecGridModel
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("rsi_overbought_count")]
+        public int RsiOverboughtCount { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("near_52h_count")]
+        public int Near52hCount { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("below_200ma_count")]
+        public int Below200maCount { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("tc_below_40_count")]
+        public int TcBelow40Count { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("tc_above_85_count")]
+        public int TcAbove85Count { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("rsi_overbought_symbols")]
+        public List<string>? RsiOverboughtSymbols { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("near_52h_symbols")]
+        public List<string>? Near52hSymbols { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("below_200ma_symbols")]
+        public List<string>? Below200maSymbols { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("tc_below_40_symbols")]
+        public List<string>? TcBelow40Symbols { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("tc_above_85_symbols")]
+        public List<string>? TcAbove85Symbols { get; set; }
+    }
+
+    private class AlertModel
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("severity")]
+        public string Severity { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("symbol")]
+        public string Symbol { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("message")]
+        public string Message { get; set; } = "";
+    }
+
+    private class ActionModel
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("symbol")]
+        public string Symbol { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("action")]
+        public string Action { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("reasoning")]
+        public string Reasoning { get; set; } = "";
+    }
+
+    private class PositionSummaryModel
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("symbol")]
+        public string Symbol { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("tc_score")]
+        public int TcScore { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("tc_label")]
+        public string TcLabel { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("rsi")]
+        public decimal Rsi { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("sma50")]
+        public decimal Sma50 { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("sma200")]
+        public decimal Sma200 { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("high_52w")]
+        public decimal High52w { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("current_price")]
+        public decimal CurrentPrice { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("avg_cost")]
+        public decimal AvgCost { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("day_change_pct")]
+        public decimal DayChangePct { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("pnl_pct")]
+        public decimal PnlPct { get; set; }
+    }
+}

@@ -1,24 +1,55 @@
 @inherits LayoutComponentBase
 
 <div class="shell">
-    <header class="topbar">
-        <a href="" class="topbar__brand">Portlite<sup>v0.1</sup></a>
-        <nav class="topbar__nav">
-            <NavLink href="" Match="NavLinkMatch.All">Dashboard</NavLink>
-            <NavLink href="hesap">Hesap</NavLink>
-            <NavLink href="portfolios">Portföyler</NavLink>
-            <NavLink href="trades">İşlemler</NavLink>
-            <NavLink href="cash">Nakit</NavLink>
-            <NavLink href="watchlist">Watchlist</NavLink>
-            <NavLink href="haberler">Haberler</NavLink>
-            <NavLink href="assets">Varlık Kataloğu</NavLink>
-        </nav>
-        <div class="topbar__meta">
-            <span>@DateTime.Now.ToString("dd MMM yyyy")</span> · <span>@DateTime.Now.ToString("HH:mm")</span> TRT
+    <button class="sidebar-toggle" @onclick="ToggleSidebar">☰</button>
+    <aside class="sidebar @(_sidebarOpen ? "sidebar--open" : "")">
+        <div class="sidebar__header">
+            <div class="sidebar__brand">
+                <span class="sidebar__brand-main">Portföy</span>
+                <span class="sidebar__brand-sub">Platform</span>
+            </div>
+            <button class="sidebar__close" @onclick="ToggleSidebar">×</button>
         </div>
-    </header>
+
+        <div class="sidebar__group-label">Görünüm</div>
+        <nav class="sidebar__nav">
+            <NavLink href="" Match="NavLinkMatch.All" class="sidebar__link">
+                <span class="sidebar__icon">◉</span><span>Portföy</span>
+            </NavLink>
+            <NavLink href="trades" class="sidebar__link">
+                <span class="sidebar__icon">⇄</span><span>Geçmiş İşlemler</span>
+            </NavLink>
+            <NavLink href="watchlist" class="sidebar__link">
+                <span class="sidebar__icon">☆</span><span>Watchlist</span>
+            </NavLink>
+            <NavLink href="haberler" class="sidebar__link">
+                <span class="sidebar__icon">✦</span><span>Haberler</span>
+            </NavLink>
+            <NavLink href="porttech" class="sidebar__link">
+                <span class="sidebar__icon">⬢</span><span>Porttech</span>
+            </NavLink>
+        </nav>
+
+        <div class="sidebar__group-label">Yönetim</div>
+        <nav class="sidebar__nav">
+            <NavLink href="portfolios" class="sidebar__link">
+                <span class="sidebar__icon">▤</span><span>Portföyler</span>
+            </NavLink>
+            <NavLink href="cash" class="sidebar__link">
+                <span class="sidebar__icon">$</span><span>Nakit</span>
+            </NavLink>
+            <NavLink href="assets" class="sidebar__link">
+                <span class="sidebar__icon">◇</span><span>Varlık Kataloğu</span>
+            </NavLink>
+        </nav>
+    </aside>
 
     <main class="main">
         @Body
     </main>
 </div>
+
+@code {
+    private bool _sidebarOpen;
+    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+}

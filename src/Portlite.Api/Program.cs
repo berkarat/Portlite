@@ -37,6 +37,7 @@ builder.Services.Configure<AzureFoundryOptions>(
     builder.Configuration.GetSection(AzureFoundryOptions.SectionName));
 builder.Services.AddSingleton<IAiAnalysisClient, AzureFoundryAnalysisClient>();
 builder.Services.AddScoped<PortfolioAnalysisService>();
+builder.Services.AddScoped<PorttechService>();
 builder.Services.AddScoped<NewsService>();
 
 builder.Services.Configure<SnapshotJobOptions>(builder.Configuration.GetSection(SnapshotJobOptions.SectionName));

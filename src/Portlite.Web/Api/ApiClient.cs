@@ -180,6 +180,21 @@ public class ApiClient
         _http.GetFromJsonAsync<List<NewsItemDto>>(
             $"api/news/{Uri.EscapeDataString(symbol)}?days={days}&take={take}", JsonOpts);
 
+    // ---------------- porttech ----------------
+    public async Task<PorttechReportDto> GeneratePorttechAsync(Guid portfolioId)
+    {
+        var res = await _http.PostAsync($"api/porttech/generate/{portfolioId}", null);
+        await EnsureSuccess(res);
+        return (await res.Content.ReadFromJsonAsync<PorttechReportDto>(JsonOpts))!;
+    }
+
+    public Task<PorttechReportDto?> GetLatestPorttechAsync(Guid portfolioId) =>
+        _http.GetFromJsonAsync<PorttechReportDto>($"api/porttech/latest/{portfolioId}", JsonOpts);
+
+    public Task<List<PorttechReportDto>?> GetPorttechHistoryAsync(Guid portfolioId, int take = 20) =>
+        _http.GetFromJsonAsync<List<PorttechReportDto>>(
+            $"api/porttech/history/{portfolioId}?take={take}", JsonOpts);
+
     private static async Task EnsureSuccess(HttpResponseMessage res)
     {
         if (res.IsSuccessStatusCode) return;

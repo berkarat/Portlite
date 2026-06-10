@@ -54,14 +54,19 @@ public class PortfolioSnapshotService
 
         // Step 2: Persist quotes — batched DB ops (single load + single SaveChanges).
         // Avoids N×2 round trips against Azure SQL.
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // Load existing price snapshots for all relevant dates (today + quote timestamps).
+        var quoteDates = fetchedQuotes.Where(q => q is not null)
+            .Select(q => DateOnly.FromDateTime(q!.Timestamp))
+            .Append(DateOnly.FromDateTime(DateTime.UtcNow))
+            .Distinct().ToList();
         var existingPrices = await _db.PriceSnapshots
-            .Where(p => p.Date == today && distinctSymbols.Contains(p.AssetSymbol))
-            .ToDictionaryAsync(p => p.AssetSymbol, ct);
+            .Where(p => quoteDates.Contains(p.Date) && distinctSymbols.Contains(p.AssetSymbol))
+            .ToDictionaryAsync(p => (p.AssetSymbol, p.Date), ct);
         foreach (var quote in fetchedQuotes)
         {
             if (quote is null) continue;
-            if (existingPrices.TryGetValue(quote.Symbol, out var price))
+            var quoteDate = DateOnly.FromDateTime(quote.Timestamp);
+            if (existingPrices.TryGetValue((quote.Symbol, quoteDate), out var price))
             {
                 price.Close = quote.Current;
                 price.PreviousClose = quote.PreviousClose;
@@ -72,17 +77,19 @@ public class PortfolioSnapshotService
             }
             else
             {
-                _db.PriceSnapshots.Add(new PriceSnapshot
+                var newSnap = new PriceSnapshot
                 {
                     AssetSymbol = quote.Symbol,
-                    Date = DateOnly.FromDateTime(quote.Timestamp),
+                    Date = quoteDate,
                     Close = quote.Current,
                     PreviousClose = quote.PreviousClose,
                     Open = quote.DayOpen,
                     High = quote.DayHigh,
                     Low = quote.DayLow,
                     Source = quote.Source
-                });
+                };
+                _db.PriceSnapshots.Add(newSnap);
+                existingPrices[(quote.Symbol, quoteDate)] = newSnap;
             }
         }
         await _db.SaveChangesAsync(ct);
