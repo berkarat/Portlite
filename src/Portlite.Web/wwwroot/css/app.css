@@ -1285,6 +1285,252 @@ table.dt td .badge--option {
     gap: 14px;
 }
 
+/* ── Trade Modal — Card-based (.tm) ─────────────────────────── */
+.tm {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Base card */
+.tm-card {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.tm-card__header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-head);
+}
+.tm-card__title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+}
+.tm-card__body {
+    padding: 16px 18px;
+}
+
+/* Card variants */
+.tm-card--accent {
+    border-color: rgba(59,130,246,0.2);
+    background: linear-gradient(180deg, rgba(59,130,246,0.04) 0%, var(--bg-subtle) 100%);
+}
+.tm-card--summary {
+    background: var(--bg-page);
+    border-color: var(--border-strong);
+}
+.tm-card--warn {
+    background: rgba(245,158,11,0.05);
+    border-color: rgba(245,158,11,0.25);
+    color: #f59e0b;
+    font-size: 13px;
+    font-weight: 500;
+}
+.tm-card--error {
+    background: var(--loss-bg);
+    border-color: rgba(239,68,68,0.25);
+    color: var(--loss);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* Quote inside card */
+.tm-quote {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.tm-quote__left {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.tm-quote__sym {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text-primary);
+}
+.tm-quote__name {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+.tm-quote__right {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.tm-quote__price {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+.tm-quote__change {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+}
+.tm-quote__pos {
+    padding: 10px 18px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-head);
+}
+.tm-quote__pos strong {
+    color: var(--text-primary);
+}
+
+/* Form fields */
+.tm-field-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.tm-field-row:last-child {
+    margin-bottom: 0;
+}
+.tm-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.tm-field__label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.tm-field__input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-page);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-primary);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.tm-field__input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.tm-field__input::placeholder {
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 13px;
+}
+.tm-field__input-wrap {
+    position: relative;
+}
+.tm-field__prefix {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    transform: translateY(-50%);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+.tm-field__input--prefix {
+    padding-left: 28px;
+}
+.tm-field__live {
+    background: var(--accent-soft);
+    border: none;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.tm-field__live:hover {
+    background: rgba(59,130,246,0.2);
+}
+
+/* Side toggle */
+.tm-side-toggle {
+    display: flex;
+    gap: 0;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+.tm-side-toggle__btn {
+    flex: 1;
+    padding: 10px 0;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    background: var(--bg-page);
+    color: var(--text-tertiary);
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.tm-side-toggle__btn:first-child {
+    border-right: 1px solid var(--border);
+}
+.tm-side-toggle__btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.tm-side-toggle__btn--buy {
+    background: var(--gain-bg);
+    color: var(--gain);
+    font-weight: 700;
+}
+.tm-side-toggle__btn--sell {
+    background: var(--loss-bg);
+    color: var(--loss);
+    font-weight: 700;
+}
+
+/* Totals */
+.tm-totals {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.tm-totals__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+}
+.tm-totals__label {
+    color: var(--text-secondary);
+}
+.tm-totals__value {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+.tm-totals__row--final {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-strong);
+}
+.tm-totals__value--big {
+    font-size: 18px;
+    font-weight: 700;
+}
+
 .quote-card {
     background: linear-gradient(180deg, var(--accent-soft), transparent 80%);
     border: 1px solid rgba(59,130,246,0.18);
@@ -1718,36 +1964,140 @@ table.dt td .badge--option {
 .rz-dropdown-panel,
 .rz-dropdown-data-grid-popup {
     border: 1px solid var(--border-strong) !important;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3) !important;
-    border-radius: var(--radius-sm) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;
+    border-radius: var(--radius) !important;
     background: var(--bg-surface) !important;
+    overflow: hidden;
 }
 .rz-dropdown,
 .rz-textbox,
 .rz-numeric,
 .rz-dropdown-data-grid-search {
     font-family: var(--font-sans);
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
     background: var(--bg-subtle) !important;
 }
-.rz-grid-table thead th {
-    background: var(--bg-subtle) !important;
-    color: var(--text-tertiary) !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 10px 14px !important;
+
+/* Search input inside dropdown */
+.rz-dropdown-data-grid-search {
     border-bottom: 1px solid var(--border) !important;
+    padding: 10px 12px !important;
+}
+.rz-dropdown-data-grid-search .rz-textbox,
+.rz-dropdown-data-grid-search input {
+    background: var(--bg-page) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-primary) !important;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+}
+.rz-dropdown-data-grid-search .rz-textbox:focus,
+.rz-dropdown-data-grid-search input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-soft) !important;
+    outline: none !important;
+}
+.rz-dropdown-data-grid-search .rz-button {
+    background: var(--accent) !important;
+    border: none !important;
+    border-radius: var(--radius-sm) !important;
+    color: #fff !important;
+}
+
+/* Table header */
+.rz-grid-table thead th {
+    background: var(--bg-head) !important;
+    color: var(--text-tertiary) !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 8px 14px !important;
+    border-bottom: 1px solid var(--border) !important;
+    border-top: none !important;
+}
+
+/* Table rows — all rows same dark bg */
+.rz-grid-table tbody tr {
+    background: var(--bg-surface) !important;
+}
+.rz-grid-table tbody tr:nth-child(even) {
+    background: var(--bg-subtle) !important;
 }
 .rz-grid-table tbody td {
     border-bottom: 1px solid var(--border-subtle) !important;
     color: var(--text-primary) !important;
     padding: 10px 14px !important;
     font-size: 13px !important;
+    background: transparent !important;
 }
 .rz-grid-table tbody tr:hover td {
     background: var(--bg-hover) !important;
+}
+/* Highlighted/selected row */
+.rz-grid-table tbody tr.rz-state-highlight td,
+.rz-grid-table tbody tr.rz-datatable-highlight td {
+    background: var(--accent-soft) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Data grid pager */
+.rz-pager {
+    background: var(--bg-head) !important;
+    border-top: 1px solid var(--border) !important;
+    padding: 6px 12px !important;
+}
+.rz-pager .rz-pager-page,
+.rz-pager .rz-pager-element {
+    color: var(--text-secondary) !important;
+    background: transparent !important;
+    border: none !important;
+}
+.rz-pager .rz-state-active {
+    background: var(--accent) !important;
+    color: #fff !important;
+    border-radius: 4px !important;
+}
+
+/* Dropdown trigger in modal */
+.tm-card .rz-dropdown {
+    background: var(--bg-page) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    min-height: 42px;
+}
+.tm-card .rz-dropdown:hover {
+    border-color: var(--border-strong) !important;
+}
+.tm-card .rz-dropdown:focus-within,
+.tm-card .rz-dropdown.rz-state-focused {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-soft) !important;
+}
+.tm-card .rz-dropdown .rz-inputtext,
+.tm-card .rz-dropdown .rz-dropdown-label {
+    color: var(--text-primary) !important;
+    font-size: 14px !important;
+}
+.tm-card .rz-dropdown .rz-dropdown-trigger {
+    color: var(--text-tertiary) !important;
+}
+
+/* Ticker column bold */
+.rz-grid-table .ticker {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text-primary);
+}
+
+/* Type column muted */
+.sym-search__row-type {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 /* Radzen donut/chart legend dark override */
@@ -1909,4 +2259,205 @@ table.dt td .badge--option {
     font-size: 11px;
     color: var(--text-muted);
     text-align: right;
+}
+
+/* 3 Summary Badge Cards */
+.porttech-badges-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+}
+.porttech-badge-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 20px;
+    border-radius: 10px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--border);
+}
+.porttech-badge-card--info { border-left-color: #3b82f6; }
+.porttech-badge-card--danger { border-left-color: #ef4444; }
+.porttech-badge-card--success { border-left-color: #22c55e; }
+.porttech-badge-card__icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.porttech-badge-card__content { flex: 1; min-width: 0; }
+.porttech-badge-card__title {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.porttech-badge-card__text {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+.porttech-strong-sym {
+    font-weight: 600;
+    color: var(--gain);
+    margin-right: 6px;
+}
+
+/* Context Box */
+.porttech-context-box {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 10px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+}
+.porttech-ctx-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 120px;
+}
+.porttech-ctx-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+.porttech-ctx-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.porttech-stance--savunmacı { color: #f59e0b; }
+.porttech-stance--nötr { color: #3b82f6; }
+.porttech-stance--agresif { color: #ef4444; }
+
+/* Stop & Target columns */
+.porttech-stop, .porttech-target {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.porttech-stop { color: #ef4444; }
+.porttech-target { color: #22c55e; }
+
+/* Yani (plain language summary) */
+.porttech-yani {
+    margin-top: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(59, 130, 246, 0.06);
+    border-left: 3px solid #3b82f6;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+/* Summary Note */
+.porttech-summary-note {
+    margin-top: 20px;
+    padding: 14px 18px;
+    border-radius: 8px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+/* Glossary */
+.porttech-glossary {
+    margin-top: 24px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-subtle);
+    overflow: hidden;
+}
+.porttech-glossary__toggle {
+    cursor: pointer;
+    padding: 14px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    list-style: none;
+    user-select: none;
+}
+.porttech-glossary__toggle::-webkit-details-marker { display: none; }
+.porttech-glossary__toggle::before {
+    content: "▸ ";
+    transition: transform 0.2s;
+}
+.porttech-glossary[open] .porttech-glossary__toggle::before {
+    content: "▾ ";
+}
+.porttech-glossary__body {
+    padding: 0 20px 20px;
+}
+.porttech-glossary__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.porttech-glossary__list li {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+.porttech-glossary__list li:last-child {
+    border-bottom: none;
+}
+.porttech-glossary__list li strong {
+    color: var(--text-primary);
+}
+
+/* Porttech Badge in position table */
+.porttech-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: 0.02em;
+    font-family: var(--font-sans);
+}
+.porttech-badge--strong {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--gain);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.porttech-badge--healthy {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.porttech-badge--watch {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.porttech-badge--critical {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--loss);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Trade notes column */
+.trade-note {
+    max-width: 220px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

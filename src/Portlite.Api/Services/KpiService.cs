@@ -37,7 +37,7 @@ public class KpiService
             return new KpiSummaryDto(
                 subPortfolioId,
                 DateOnly.FromDateTime(DateTime.UtcNow),
-                zero, zero, null, zero, null, zero, null,
+                zero, zero, zero, zero, null, zero, null, zero, null,
                 zero,
                 HasBaseline: false);
         }
@@ -85,6 +85,8 @@ public class KpiService
             subPortfolioId,
             asOf,
             totalEquity.ToDto(),
+            cashBalance.ToDto(),
+            latest.MarketValue.ToDto(),
             new Money(allTimePnLAmount, reportingCurrency).ToDto(),
             allTimePct,
             new Money(lastDayChange, reportingCurrency).ToDto(),

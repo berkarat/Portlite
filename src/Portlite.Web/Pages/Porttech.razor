@@ -50,7 +50,7 @@ else if (_selectedReport is null)
 else
 {
     <div class="porttech-report">
-        @* Executive Summary *@
+        @* Header *@
         <div class="panel porttech-summary">
             <div class="panel__body--padded">
                 <h2 class="porttech-section-title">Porttech · Portföy Teknik Analiz</h2>
@@ -59,17 +59,110 @@ else
                     @_selectedReport.CreatedAt.ToLocalTime().ToString("HH:mm") ·
                     @(_parsedReport?.PositionSummary?.Count ?? 0) pozisyon
                 </div>
-                @if (!string.IsNullOrEmpty(_parsedReport?.ExecutiveSummary))
-                {
-                    <div class="porttech-exec-summary">@_parsedReport.ExecutiveSummary</div>
-                }
             </div>
         </div>
+
+        @* 3 Summary Badges *@
+        @if (_parsedReport?.ExecGrid is not null)
+        {
+            <div class="porttech-badges-row">
+                @* Genel Tablo *@
+                <div class="porttech-badge-card porttech-badge-card--info">
+                    <div class="porttech-badge-card__icon">📊</div>
+                    <div class="porttech-badge-card__content">
+                        <div class="porttech-badge-card__title">Genel Tablo</div>
+                        <div class="porttech-badge-card__text">
+                            @(_parsedReport.ContextBox?.PositionCount ?? _parsedReport.PositionSummary?.Count ?? 0) pozisyon,
+                            @(_parsedReport.ExecGrid.BelowCostCount) maliyetin altında
+                            · Nakit @(_parsedReport.ContextBox?.CashPct ?? "—")
+                            (@(_parsedReport.ContextBox?.CashStance ?? "—"))
+                        </div>
+                    </div>
+                </div>
+                @* Kritik *@
+                <div class="porttech-badge-card porttech-badge-card--danger">
+                    <div class="porttech-badge-card__icon">⚠️</div>
+                    <div class="porttech-badge-card__content">
+                        <div class="porttech-badge-card__title">Kritik</div>
+                        <div class="porttech-badge-card__text">
+                            @if (_parsedReport.ExecGrid.BelowEma50Symbols is { Count: > 0 })
+                            {
+                                @string.Join(", ", _parsedReport.ExecGrid.BelowEma50Symbols)
+                                <span> EMA50 altında</span>
+                            }
+                            else
+                            {
+                                <span>EMA50 altında pozisyon yok</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+                @* Güçlü Tutan *@
+                <div class="porttech-badge-card porttech-badge-card--success">
+                    <div class="porttech-badge-card__icon">✅</div>
+                    <div class="porttech-badge-card__content">
+                        <div class="porttech-badge-card__title">Güçlü Tutan</div>
+                        <div class="porttech-badge-card__text">
+                            @if (_parsedReport.ExecGrid.TcAbove85Symbols is { Count: > 0 })
+                            {
+                                @foreach (var sym in _parsedReport.ExecGrid.TcAbove85Symbols)
+                                {
+                                    var pos = _parsedReport.PositionSummary?.FirstOrDefault(p => p.Symbol == sym);
+                                    if (pos is not null)
+                                    {
+                                        <span class="porttech-strong-sym">@sym @(pos.UnrealizedPnl >= 0 ? "+" : "")$@pos.UnrealizedPnl.ToString("N0")</span>
+                                    }
+                                }
+                                <span> — trend bozulmadı</span>
+                            }
+                            else
+                            {
+                                <span>TC ≥ 85 pozisyon yok</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* Portföy Bağlamı *@
+        @if (_parsedReport?.ContextBox is not null)
+        {
+            <h3 class="porttech-section-title" style="margin-top:24px;">Portföy Bağlamı</h3>
+            <div class="porttech-context-box">
+                <div class="porttech-ctx-item">
+                    <span class="porttech-ctx-label">Toplam Varlık</span>
+                    <span class="porttech-ctx-value">@_parsedReport.ContextBox.TotalEquity</span>
+                </div>
+                <div class="porttech-ctx-item">
+                    <span class="porttech-ctx-label">Pozisyon Değeri</span>
+                    <span class="porttech-ctx-value">@_parsedReport.ContextBox.PositionValue</span>
+                </div>
+                <div class="porttech-ctx-item">
+                    <span class="porttech-ctx-label">Nakit</span>
+                    <span class="porttech-ctx-value">@_parsedReport.ContextBox.CashBalance (@_parsedReport.ContextBox.CashPct)</span>
+                </div>
+                <div class="porttech-ctx-item">
+                    <span class="porttech-ctx-label">Pozisyon Sayısı</span>
+                    <span class="porttech-ctx-value">@_parsedReport.ContextBox.PositionCount</span>
+                </div>
+                <div class="porttech-ctx-item">
+                    <span class="porttech-ctx-label">Nakit Tavrı</span>
+                    <span class="porttech-ctx-value porttech-stance--@_parsedReport.ContextBox.CashStance">@_parsedReport.ContextBox.CashStance</span>
+                </div>
+            </div>
+        }
+
+        @* Executive Summary *@
+        @if (!string.IsNullOrEmpty(_parsedReport?.ExecutiveSummary))
+        {
+            <div class="porttech-exec-summary" style="margin-top:16px;">@_parsedReport.ExecutiveSummary</div>
+        }
 
         @* Exec Grid *@
         @if (_parsedReport?.ExecGrid is not null)
         {
-            <h3 class="porttech-section-title" style="margin-top:24px;">Yönetici Özeti (Exec Grid)</h3>
+            <h3 class="porttech-section-title" style="margin-top:24px;">Yönetici Özeti</h3>
             <div class="porttech-exec-grid">
                 <div class="porttech-grid-card porttech-grid-card--red">
                     <div class="porttech-grid-num">@_parsedReport.ExecGrid.RsiOverboughtCount</div>
@@ -82,9 +175,9 @@ else
                     <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.Near52hSymbols ?? [])</div>
                 </div>
                 <div class="porttech-grid-card porttech-grid-card--orange">
-                    <div class="porttech-grid-num">@_parsedReport.ExecGrid.Below200maCount</div>
-                    <div class="porttech-grid-label">200MA Altı</div>
-                    <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.Below200maSymbols ?? [])</div>
+                    <div class="porttech-grid-num">@_parsedReport.ExecGrid.BelowEma50Count</div>
+                    <div class="porttech-grid-label">EMA50 Altı</div>
+                    <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.BelowEma50Symbols ?? [])</div>
                 </div>
                 <div class="porttech-grid-card porttech-grid-card--red">
                     <div class="porttech-grid-num">@_parsedReport.ExecGrid.TcBelow40Count</div>
@@ -95,6 +188,11 @@ else
                     <div class="porttech-grid-num">@_parsedReport.ExecGrid.TcAbove85Count</div>
                     <div class="porttech-grid-label">TC ≥ 85 (Güçlü)</div>
                     <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.TcAbove85Symbols ?? [])</div>
+                </div>
+                <div class="porttech-grid-card porttech-grid-card--orange">
+                    <div class="porttech-grid-num">@_parsedReport.ExecGrid.BelowCostCount</div>
+                    <div class="porttech-grid-label">Maliyet Altı</div>
+                    <div class="porttech-grid-detail">@string.Join(", ", _parsedReport.ExecGrid.BelowCostSymbols ?? [])</div>
                 </div>
             </div>
         }
@@ -107,7 +205,7 @@ else
                 @foreach (var alert in _parsedReport.Alerts)
                 {
                     <div class="porttech-alert porttech-alert--@alert.Severity">
-                        <div class="porttech-alert__badge">@SeverityLabel(alert.Severity)</div>
+                        <div class="porttech-alert__badge">@(string.IsNullOrEmpty(alert.Category) ? SeverityLabel(alert.Severity) : alert.Category)</div>
                         <div class="porttech-alert__symbol">@alert.Symbol</div>
                         <div class="porttech-alert__msg">@alert.Message</div>
                     </div>
@@ -118,7 +216,7 @@ else
         @* Actions Table *@
         @if (_parsedReport?.Actions is { Count: > 0 })
         {
-            <h3 class="porttech-section-title" style="margin-top:24px;">📋 Önerilen Aksiyon Tablosu</h3>
+            <h3 class="porttech-section-title" style="margin-top:24px;">📋 Önerilen Aksiyonlar</h3>
             <div class="panel" style="overflow-x:auto;">
                 <table class="dt">
                     <thead>
@@ -126,6 +224,8 @@ else
                             <th>Ticker</th>
                             <th>Aksiyon</th>
                             <th>Gerekçe</th>
+                            <th>Stop Seviyesi</th>
+                            <th>Hedef / Reclaim</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -134,7 +234,15 @@ else
                             <tr>
                                 <td><strong>@a.Symbol</strong></td>
                                 <td><span class="porttech-action-badge @ActionClass(a.Action)">@a.Action</span></td>
-                                <td class="porttech-reasoning">@a.Reasoning</td>
+                                <td class="porttech-reasoning">
+                                    @a.Reasoning
+                                    @if (!string.IsNullOrEmpty(a.Yani))
+                                    {
+                                        <div class="porttech-yani">💬 yani: @a.Yani</div>
+                                    }
+                                </td>
+                                <td class="porttech-stop">@(a.StopLevel ?? "—")</td>
+                                <td class="porttech-target">@(a.TargetOrReclaim ?? "—")</td>
                             </tr>
                         }
                     </tbody>
@@ -153,12 +261,13 @@ else
                             <th>Ticker</th>
                             <th>Fiyat</th>
                             <th>Maliyet</th>
-                            <th>Bugün %</th>
-                            <th>P&amp;L %</th>
-                            <th>TC Skor</th>
-                            <th>TC Etiket</th>
+                            <th>K/Z</th>
+                            <th>K/Z %</th>
+                            <th>TC</th>
                             <th>RSI</th>
-                            <th>50MA</th>
+                            <th>EMA21</th>
+                            <th>EMA50</th>
+                            <th>EMA50 %</th>
                             <th>200MA</th>
                             <th>52H</th>
                         </tr>
@@ -170,12 +279,13 @@ else
                                 <td><strong>@p.Symbol</strong></td>
                                 <td>$@p.CurrentPrice.ToString("N2")</td>
                                 <td>$@p.AvgCost.ToString("N2")</td>
-                                <td class="@DeltaClass(p.DayChangePct)">@FormatPct(p.DayChangePct)</td>
+                                <td class="@DeltaClass(p.UnrealizedPnl)">@(p.UnrealizedPnl >= 0 ? "+" : "")$@p.UnrealizedPnl.ToString("N0")</td>
                                 <td class="@DeltaClass(p.PnlPct)">@FormatPct(p.PnlPct)</td>
                                 <td><span class="porttech-tc @TcClass(p.TcScore)">@p.TcScore</span></td>
-                                <td>@p.TcLabel</td>
                                 <td>@p.Rsi.ToString("N1")</td>
-                                <td>@FormatMa(p.Sma50)</td>
+                                <td>$@p.Ema21.ToString("N2")</td>
+                                <td>$@p.Ema50.ToString("N2")</td>
+                                <td class="@DeltaClass(p.Ema50DistPct)">@FormatPct(p.Ema50DistPct)</td>
                                 <td>@FormatMa(p.Sma200)</td>
                                 <td>@FormatMa(p.High52w)</td>
                             </tr>
@@ -184,6 +294,34 @@ else
                 </table>
             </div>
         }
+
+        @* Summary Note *@
+        @if (!string.IsNullOrEmpty(_parsedReport?.SummaryNote))
+        {
+            <div class="porttech-summary-note">
+                <strong>Özet:</strong> @_parsedReport.SummaryNote
+            </div>
+        }
+
+        @* Terimler Sözlüğü *@
+        <details class="porttech-glossary">
+            <summary class="porttech-glossary__toggle">📖 Terimler Sözlüğü</summary>
+            <div class="porttech-glossary__body">
+                <ul class="porttech-glossary__list">
+                    <li><strong>TC (Trend Composite):</strong> 0-100 arası teknik skor. RSI, EMA50 mesafesi, 200MA mesafesi ve 52H mesafesini birleştirir. ≥85 Güçlü · 60-84 Sağlıklı · 40-59 Zayıf · &lt;40 Bitmiş</li>
+                    <li><strong>EMA21 / EMA50:</strong> Üssel Hareketli Ortalama. Son fiyatlara daha fazla ağırlık verir. EMA21 kısa vade, EMA50 orta vade trend çizgisi.</li>
+                    <li><strong>SMA200:</strong> 200 günlük Basit Hareketli Ortalama. Uzun vadeli trend — fiyat üstündeyse boğa, altındaysa ayı.</li>
+                    <li><strong>RSI:</strong> 14 günlük göreceli güç endeksi. ≥70 aşırı alım, ≤30 aşırı satım, ~50 nötr.</li>
+                    <li><strong>52H:</strong> Son 1 yılın en yüksek fiyatı. Yakınlık = momentum gücü.</li>
+                    <li><strong>Stop Seviyesi:</strong> Bu fiyatın altında kapanırsa pozisyondan çıkış önerilir.</li>
+                    <li><strong>Hedef / Reclaim:</strong> Fiyat bu seviyeyi geri kazanırsa güven verir veya ek alım noktası olur.</li>
+                    <li><strong>HOLD / CONFLUENCE:</strong> Tut — teknik göstergeler uyumlu, pozisyon sağlıklı.</li>
+                    <li><strong>STOP SIKILAŞTIR:</strong> Stop'u yukarı çek — risk var ama henüz çıkış sinyali yok.</li>
+                    <li><strong>AZALT:</strong> Lot küçült veya pozisyonu kapat — teknik bozulma belirgin.</li>
+                    <li><strong>Nakit Tavrı:</strong> ≥%15 savunmacı · %5-15 nötr · &lt;%5 agresif.</li>
+                </ul>
+            </div>
+        </details>
 
         @* Token usage *@
         <div class="porttech-footer">
@@ -307,6 +445,9 @@ else
         [System.Text.Json.Serialization.JsonPropertyName("executive_summary")]
         public string? ExecutiveSummary { get; set; }
 
+        [System.Text.Json.Serialization.JsonPropertyName("context_box")]
+        public ContextBoxModel? ContextBox { get; set; }
+
         [System.Text.Json.Serialization.JsonPropertyName("exec_grid")]
         public ExecGridModel? ExecGrid { get; set; }
 
@@ -318,6 +459,25 @@ else
 
         [System.Text.Json.Serialization.JsonPropertyName("position_summary")]
         public List<PositionSummaryModel>? PositionSummary { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("summary_note")]
+        public string? SummaryNote { get; set; }
+    }
+
+    private class ContextBoxModel
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("total_equity")]
+        public string TotalEquity { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("position_value")]
+        public string PositionValue { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("cash_balance")]
+        public string CashBalance { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("cash_pct")]
+        public string CashPct { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("position_count")]
+        public int PositionCount { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("cash_stance")]
+        public string CashStance { get; set; } = "";
     }
 
     private class ExecGridModel
@@ -326,8 +486,10 @@ else
         public int RsiOverboughtCount { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("near_52h_count")]
         public int Near52hCount { get; set; }
-        [System.Text.Json.Serialization.JsonPropertyName("below_200ma_count")]
-        public int Below200maCount { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("below_ema50_count")]
+        public int BelowEma50Count { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("below_cost_count")]
+        public int BelowCostCount { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("tc_below_40_count")]
         public int TcBelow40Count { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("tc_above_85_count")]
@@ -336,8 +498,10 @@ else
         public List<string>? RsiOverboughtSymbols { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("near_52h_symbols")]
         public List<string>? Near52hSymbols { get; set; }
-        [System.Text.Json.Serialization.JsonPropertyName("below_200ma_symbols")]
-        public List<string>? Below200maSymbols { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("below_ema50_symbols")]
+        public List<string>? BelowEma50Symbols { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("below_cost_symbols")]
+        public List<string>? BelowCostSymbols { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("tc_below_40_symbols")]
         public List<string>? TcBelow40Symbols { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("tc_above_85_symbols")]
@@ -346,6 +510,8 @@ else
 
     private class AlertModel
     {
+        [System.Text.Json.Serialization.JsonPropertyName("category")]
+        public string Category { get; set; } = "";
         [System.Text.Json.Serialization.JsonPropertyName("severity")]
         public string Severity { get; set; } = "";
         [System.Text.Json.Serialization.JsonPropertyName("symbol")]
@@ -362,6 +528,12 @@ else
         public string Action { get; set; } = "";
         [System.Text.Json.Serialization.JsonPropertyName("reasoning")]
         public string Reasoning { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("stop_level")]
+        public string? StopLevel { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("target_or_reclaim")]
+        public string? TargetOrReclaim { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("yani")]
+        public string? Yani { get; set; }
     }
 
     private class PositionSummaryModel
@@ -374,8 +546,12 @@ else
         public string TcLabel { get; set; } = "";
         [System.Text.Json.Serialization.JsonPropertyName("rsi")]
         public decimal Rsi { get; set; }
-        [System.Text.Json.Serialization.JsonPropertyName("sma50")]
-        public decimal Sma50 { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("ema21")]
+        public decimal Ema21 { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("ema50")]
+        public decimal Ema50 { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("ema50_dist_pct")]
+        public decimal Ema50DistPct { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("sma200")]
         public decimal Sma200 { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("high_52w")]
@@ -388,5 +564,7 @@ else
         public decimal DayChangePct { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("pnl_pct")]
         public decimal PnlPct { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("unrealized_pnl")]
+        public decimal UnrealizedPnl { get; set; }
     }
 }

@@ -4,11 +4,14 @@ public record TechnicalIndicators(
     string Symbol,
     decimal CurrentPrice,
     decimal Rsi14,
+    decimal Ema21,
+    decimal Ema50,
     decimal Sma50,
     decimal Sma200,
     decimal High52Week,
     decimal Low52Week,
     decimal DistFrom52High,   // % distance from 52-week high (negative = below)
+    decimal DistFromEma50,    // % distance from EMA50
     decimal DistFrom200Ma,    // % distance from 200MA
     int TcScore,              // TrendCheck score 0-100
     string TcLabel);          // Güçlü / Sağlıklı / Baskı / Zayıf / Bitmiş
@@ -27,6 +30,8 @@ public static class TechnicalCalculator
         var rsi14 = CalculateRsi(closes, 14);
         var sma50 = closes.Count >= 50 ? closes.TakeLast(50).Average() : closes.Average();
         var sma200 = closes.Count >= 200 ? closes.TakeLast(200).Average() : closes.Average();
+        var ema21 = CalculateEma(closes, 21);
+        var ema50 = CalculateEma(closes, 50);
 
         // 52-week = 252 trading days
         var yearBars = closes.TakeLast(Math.Min(252, closes.Count)).ToList();
@@ -34,23 +39,37 @@ public static class TechnicalCalculator
         var low52 = yearBars.Min();
 
         var distFrom52High = high52 > 0 ? (latest - high52) / high52 * 100m : 0m;
+        var distFromEma50 = ema50 > 0 ? (latest - ema50) / ema50 * 100m : 0m;
         var distFrom200Ma = sma200 > 0 ? (latest - sma200) / sma200 * 100m : 0m;
 
-        var tcScore = CalculateTcScore(latest, sma50, sma200, rsi14, avgCost, high52);
+        var tcScore = CalculateTcScore(latest, ema50, sma200, rsi14, avgCost, high52);
         var tcLabel = TcScoreToLabel(tcScore);
 
         return new TechnicalIndicators(
             Symbol: symbol,
             CurrentPrice: latest,
             Rsi14: Math.Round(rsi14, 2),
+            Ema21: Math.Round(ema21, 2),
+            Ema50: Math.Round(ema50, 2),
             Sma50: Math.Round(sma50, 2),
             Sma200: Math.Round(sma200, 2),
             High52Week: high52,
             Low52Week: low52,
             DistFrom52High: Math.Round(distFrom52High, 2),
+            DistFromEma50: Math.Round(distFromEma50, 2),
             DistFrom200Ma: Math.Round(distFrom200Ma, 2),
             TcScore: tcScore,
             TcLabel: tcLabel);
+    }
+
+    private static decimal CalculateEma(List<decimal> closes, int period)
+    {
+        if (closes.Count < period) return closes.Average();
+        var multiplier = 2m / (period + 1);
+        var ema = closes.Take(period).Average(); // seed with SMA
+        for (int i = period; i < closes.Count; i++)
+            ema = (closes[i] - ema) * multiplier + ema;
+        return ema;
     }
 
     private static decimal CalculateRsi(List<decimal> closes, int period)
@@ -91,12 +110,12 @@ public static class TechnicalCalculator
     /// - Fiyat > Maliyet → +15
     /// - 52H zirvesinin %10'u içinde → +10
     /// </summary>
-    private static int CalculateTcScore(decimal price, decimal sma50, decimal sma200, decimal rsi, decimal avgCost, decimal high52)
+    private static int CalculateTcScore(decimal price, decimal ema50, decimal sma200, decimal rsi, decimal avgCost, decimal high52)
     {
         int score = 0;
 
         if (price > sma200) score += 30;
-        if (price > sma50) score += 25;
+        if (price > ema50) score += 25;
         if (rsi >= 40m && rsi <= 70m) score += 20;
         else if (rsi > 70m) score += 10; // aşırı alımda kısmen puan
         if (price > avgCost) score += 15;

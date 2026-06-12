@@ -1,4 +1,5 @@
 @inject ApiClient Api
+@implements IDisposable
 
 <div class="sym-search">
     <RadzenDropDownDataGrid TValue="string"
@@ -62,6 +63,8 @@
     private bool _isResolving;
     private string? _error;
     private AssetDto? _resolvedAsset;
+    private CancellationTokenSource? _searchCts;
+    private string? _lastQuery;
 
     private async Task OnLoadData(LoadDataArgs args)
     {
@@ -71,16 +74,37 @@
             _results = new();
             return;
         }
+
+        if (query == _lastQuery) return;
+        _lastQuery = query;
+
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var ct = _searchCts.Token;
+
         try
         {
+            await Task.Delay(300, ct);
+            if (ct.IsCancellationRequested) return;
+
             var hits = await Api.SearchSymbolsAsync(query);
-            _results = hits ?? new();
+            if (ct.IsCancellationRequested) return;
+
+            _results = (hits ?? new())
+                .GroupBy(h => h.Symbol)
+                .Select(g => g.First())
+                .ToList();
             _error = null;
         }
+        catch (TaskCanceledException) { }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            _error = ex.Message;
-            _results = new();
+            if (!ct.IsCancellationRequested)
+            {
+                _error = ex.Message;
+                _results = new();
+            }
         }
     }
 
@@ -109,5 +133,11 @@
             _isResolving = false;
             StateHasChanged();
         }
+    }
+
+    public void Dispose()
+    {
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
     }
 }

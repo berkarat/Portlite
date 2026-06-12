@@ -23,6 +23,7 @@
                 son: @_lastUpdated.Value.ToLocalTime().ToString("HH:mm:ss")
             </span>
         }
+        <button class="btn btn--primary" @onclick="OpenTradeModal" disabled="@(Store.SelectedId is null)">+ Yeni İşlem</button>
         <button class="btn" @onclick="ManualRefreshAsync" disabled="@_isRefreshing">
             @(_isRefreshing ? "Yenileniyor…" : "Yenile")
         </button>
@@ -94,6 +95,10 @@ else
                 }
             </div>
             <div style="margin-top:12px; font-size:12px; color:var(--text-tertiary);">
+                Hisseler <strong class="num" style="color:var(--text-secondary);">@Mask(Format.Money(_kpi.MarketValue))</strong>
+                · Nakit <strong class="num" style="color:var(--text-secondary);">@Mask(Format.Money(_kpi.CashBalance))</strong>
+            </div>
+            <div style="margin-top:6px; font-size:12px; color:var(--text-tertiary);">
                 Başlangıç <strong class="num" style="color:var(--text-secondary);">@Mask(Format.Money(_kpi.NetCashContributed))</strong>
                 @if (_snapshot is not null)
                 {
@@ -273,7 +278,13 @@ else
                             @ondragend="@(() => _draggingSymbol = null)">
                             <td class="drag-handle" title="Taşımak için sürükle">⋮⋮</td>
                             <td>
-                                <div class="ticker">@p.AssetSymbol</div>
+                                <div class="ticker">
+                                    <span>@p.AssetSymbol</span>
+                                    @if (_porttechBadges.TryGetValue(p.AssetSymbol, out var badge))
+                                    {
+                                        <span class="porttech-badge porttech-badge--@badge.CssClass" title="Porttech: @badge.Label">@badge.Label</span>
+                                    }
+                                </div>
                                 <div class="ticker-name">@p.AssetName</div>
                             </td>
                             <td class="right num">@Format.Qty(p.Quantity)</td>
@@ -433,6 +444,7 @@ else
                         <th class="right">Adet</th>
                         <th class="right">Birim Fiyat</th>
                         <th class="right">Toplam</th>
+                        <th>Not</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -445,6 +457,7 @@ else
                             <td class="right num">@Format.Qty(t.Quantity)</td>
                             <td class="right num">$@t.Price.ToString("N2")</td>
                             <td class="right num">$@((t.Quantity * t.Price + t.Fee).ToString("N2"))</td>
+                            <td class="trade-note">@(string.IsNullOrEmpty(t.Notes) ? "—" : t.Notes)</td>
                         </tr>
                     }
                 </tbody>
@@ -456,6 +469,168 @@ else
 <AnalysisModal IsOpen="@_aiOpen"
                PortfolioId="@Store.SelectedId"
                OnClose="() => _aiOpen = false" />
+
+<Modal IsOpen="@_tradeModalOpen" Title="Yeni İşlem" OnClose="CloseTradeModal" Width="580" CloseOnBackdropClick="true">
+    <Body>
+        <div class="tm">
+
+            @* ─── KART 1: Sembol Arama ─── *@
+            <div class="tm-card">
+                <div class="tm-card__header">
+                    <span class="tm-card__title">Sembol</span>
+                </div>
+                <div class="tm-card__body">
+                    <SymbolSearchInput Value="@_tradeForm.AssetSymbol"
+                                       ValueChanged="v => _tradeForm.AssetSymbol = v"
+                                       OnAssetResolved="OnTradeAssetResolved"
+                                       Placeholder="Hisse ara... (AAPL, MSFT, NVDA)" />
+                </div>
+            </div>
+
+            @* ─── KART 2: Fiyat Bilgisi ─── *@
+            @if (_tradeLoadingQuote)
+            {
+                <div class="tm-card">
+                    <div class="tm-card__body">
+                        <div class="skeleton" style="height:52px; border-radius:6px;"></div>
+                    </div>
+                </div>
+            }
+            else if (_tradeQuote is not null)
+            {
+                <div class="tm-card tm-card--accent">
+                    <div class="tm-card__body tm-quote">
+                        <div class="tm-quote__left">
+                            <span class="tm-quote__sym">@_tradeQuote.Symbol</span>
+                            <span class="tm-quote__name">@_tradeQuote.Source · @_tradeQuote.Timestamp.ToLocalTime().ToString("HH:mm")</span>
+                        </div>
+                        <div class="tm-quote__right">
+                            <span class="tm-quote__price num">@Format.Sign(_tradeQuote.Currency)@_tradeQuote.Current.ToString("N2")</span>
+                            <span class="tm-quote__change @Format.DeltaClass(_tradeQuote.Change)">
+                                @Format.Signed(_tradeQuote.Change, _tradeQuote.Currency) (@Format.SignedPct(_tradeQuote.ChangePercent))
+                            </span>
+                        </div>
+                    </div>
+                    @if (_tradeCurrentPos is not null && _tradeCurrentPos.Quantity > 0)
+                    {
+                        <div class="tm-quote__pos">
+                            Mevcut: <strong>@Format.Qty(_tradeCurrentPos.Quantity)</strong> adet · ort. <strong>$@_tradeCurrentPos.AverageCost.ToString("N2")</strong>
+                        </div>
+                    }
+                </div>
+            }
+
+            @* ─── KART 3: İşlem Detayları ─── *@
+            <div class="tm-card">
+                <div class="tm-card__header">
+                    <span class="tm-card__title">İşlem Detayları</span>
+                </div>
+                <div class="tm-card__body">
+
+                    <div class="tm-field-row">
+                        <div class="tm-field">
+                            <label class="tm-field__label">Yön</label>
+                            <div class="tm-side-toggle">
+                                <button type="button"
+                                        class="tm-side-toggle__btn @(_tradeForm.Side == TradeSide.Buy ? "tm-side-toggle__btn--buy" : "")"
+                                        @onclick="() => _tradeForm.Side = TradeSide.Buy">
+                                    Alış
+                                </button>
+                                <button type="button"
+                                        class="tm-side-toggle__btn @(_tradeForm.Side == TradeSide.Sell ? "tm-side-toggle__btn--sell" : "")"
+                                        @onclick="() => _tradeForm.Side = TradeSide.Sell">
+                                    Satış
+                                </button>
+                            </div>
+                        </div>
+                        <div class="tm-field">
+                            <label class="tm-field__label">Adet</label>
+                            <input type="number" step="0.0001" min="0" class="tm-field__input" @bind="_tradeForm.Quantity" placeholder="0" />
+                        </div>
+                    </div>
+
+                    <div class="tm-field-row">
+                        <div class="tm-field">
+                            <label class="tm-field__label">
+                                Birim Fiyat
+                                @if (_tradeQuote is not null)
+                                {
+                                    <button type="button" class="tm-field__live" @onclick="UseTradeQuotePrice">Canlı fiyat kullan</button>
+                                }
+                            </label>
+                            <div class="tm-field__input-wrap">
+                                <span class="tm-field__prefix">$</span>
+                                <input type="number" step="0.0001" min="0" class="tm-field__input tm-field__input--prefix" @bind="_tradeForm.Price" />
+                            </div>
+                        </div>
+                        <div class="tm-field">
+                            <label class="tm-field__label">Komisyon</label>
+                            <div class="tm-field__input-wrap">
+                                <span class="tm-field__prefix">$</span>
+                                <input type="number" step="0.01" min="0" class="tm-field__input tm-field__input--prefix" @bind="_tradeForm.Fee" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tm-field-row">
+                        <div class="tm-field">
+                            <label class="tm-field__label">Tarih (UTC)</label>
+                            <input type="datetime-local" class="tm-field__input" @bind="_tradeForm.ExecutedAt" />
+                        </div>
+                        <div class="tm-field">
+                            <label class="tm-field__label">Not (opsiyonel)</label>
+                            <input type="text" class="tm-field__input" @bind="_tradeForm.Notes" placeholder="ör. earnings sonrası giriş" />
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            @* ─── KART 4: Özet ─── *@
+            <div class="tm-card tm-card--summary">
+                <div class="tm-card__body">
+                    <div class="tm-totals">
+                        <div class="tm-totals__row">
+                            <span class="tm-totals__label">İşlem tutarı</span>
+                            <span class="tm-totals__value num">$@TradeNotional.ToString("N2")</span>
+                        </div>
+                        <div class="tm-totals__row">
+                            <span class="tm-totals__label">Komisyon</span>
+                            <span class="tm-totals__value num">$@_tradeForm.Fee.ToString("N2")</span>
+                        </div>
+                        <div class="tm-totals__row tm-totals__row--final">
+                            <span class="tm-totals__label">@(_tradeForm.Side == TradeSide.Buy ? "Toplam Maliyet" : "Net Gelir")</span>
+                            <span class="tm-totals__value tm-totals__value--big num">
+                                @(_tradeForm.Side == TradeSide.Buy ? "−" : "+")$@TradeTotalSigned.ToString("N2")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* ─── Uyarılar ─── *@
+            @if (TradePositionWarning is not null)
+            {
+                <div class="tm-card tm-card--warn">
+                    <div class="tm-card__body">@TradePositionWarning</div>
+                </div>
+            }
+            @if (_tradeFormError is not null)
+            {
+                <div class="tm-card tm-card--error">
+                    <div class="tm-card__body">@_tradeFormError</div>
+                </div>
+            }
+
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn btn--ghost" @onclick="CloseTradeModal">İptal</button>
+        <button class="btn btn--primary" @onclick="SaveTradeAsync" disabled="@(_tradeSaving || !TradeCanSubmit)">
+            @(_tradeSaving ? "Kaydediliyor…" : "İşlemi Kaydet")
+        </button>
+    </Footer>
+</Modal>
 
 @code {
     private bool _loading = true;
@@ -470,6 +645,7 @@ else
     private List<PortfolioSnapshotDto> _snapshots = new();
     private Guid? _lastLoadedId;
     private DateTime? _lastUpdated;
+    private Dictionary<string, PorttechBadgeInfo> _porttechBadges = new();
 
     private System.Threading.Timer? _pollTimer;
     private const int PollIntervalSeconds = 30;
@@ -662,7 +838,7 @@ else
     private static TimeZoneInfo GetEasternTimeZone()
     {
         try { return TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"); }
-        catch { return TimeZoneInfo.FindSystemTimeZoneById("America/New_York"); }
+        catch (TimeZoneNotFoundException) { return TimeZoneInfo.FindSystemTimeZoneById("America/New_York"); }
     }
 
     private bool MarketIsOpen
@@ -859,6 +1035,7 @@ else
             ApplyPriceFlash();
             BuildPerformanceSeries(snaps, _spyHistory);
             ComputeBenchmarkReturns();
+            _ = LoadPorttechBadgesAsync(id);
 
             if (initial) _loading = false;
             StateHasChanged();
@@ -1071,11 +1248,177 @@ else
         }, null, TimeSpan.FromSeconds(PollIntervalSeconds), TimeSpan.FromSeconds(PollIntervalSeconds));
     }
 
+    private async Task LoadPorttechBadgesAsync(Guid portfolioId)
+    {
+        try
+        {
+            var report = await Api.GetLatestPorttechAsync(portfolioId);
+            if (report is null || string.IsNullOrEmpty(report.ReportJson)) return;
+
+            var parsed = System.Text.Json.JsonSerializer.Deserialize<PorttechBadgeReport>(
+                report.ReportJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+            if (parsed?.PositionSummary is null) return;
+
+            var badges = new Dictionary<string, PorttechBadgeInfo>();
+            var alerts = parsed.Alerts ?? new();
+
+            foreach (var pos in parsed.PositionSummary)
+            {
+                var alertCount = alerts.Count(a => string.Equals(a.Symbol, pos.Symbol, StringComparison.OrdinalIgnoreCase));
+                var label = pos.TcLabel ?? "?";
+                var css = pos.TcScore switch
+                {
+                    >= 85 => "strong",
+                    >= 60 => "healthy",
+                    >= 40 => "watch",
+                    _ => "critical"
+                };
+                badges[pos.Symbol] = new PorttechBadgeInfo(label, css, alertCount);
+            }
+
+            _porttechBadges = badges;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { /* silent — badges are non-critical */ }
+    }
+
+    private class PorttechBadgeInfo
+    {
+        public string Label { get; }
+        public string CssClass { get; }
+        public int AlertCount { get; }
+        public PorttechBadgeInfo(string label, string cssClass, int alertCount)
+        {
+            Label = label;
+            CssClass = cssClass;
+            AlertCount = alertCount;
+        }
+    }
+
+    private class PorttechBadgeReport
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("position_summary")]
+        public List<PorttechBadgePosition>? PositionSummary { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("alerts")]
+        public List<PorttechBadgeAlert>? Alerts { get; set; }
+    }
+
+    private class PorttechBadgePosition
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("symbol")]
+        public string Symbol { get; set; } = "";
+
+        [System.Text.Json.Serialization.JsonPropertyName("tc_score")]
+        public int TcScore { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("tc_label")]
+        public string? TcLabel { get; set; }
+    }
+
+    private class PorttechBadgeAlert
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("symbol")]
+        public string Symbol { get; set; } = "";
+    }
+
     public void Dispose()
     {
         Store.Changed -= OnStoreChanged;
         _pollTimer?.Dispose();
         _flashCts?.Cancel();
         _flashCts?.Dispose();
+    }
+
+    // ─── Trade Modal ───────────────────────────────────────────────
+    private bool _tradeModalOpen;
+    private bool _tradeSaving;
+    private bool _tradeLoadingQuote;
+    private string? _tradeFormError;
+    private QuoteDto? _tradeQuote;
+    private PositionDto? _tradeCurrentPos;
+    private TradeFormModel _tradeForm = new();
+
+    private decimal TradeNotional => _tradeForm.Quantity * _tradeForm.Price;
+    private decimal TradeTotalSigned => TradeNotional + _tradeForm.Fee;
+
+    private bool TradeCanSubmit =>
+        !string.IsNullOrWhiteSpace(_tradeForm.AssetSymbol)
+        && _tradeForm.Quantity > 0
+        && _tradeForm.Price >= 0;
+
+    private string? TradePositionWarning
+    {
+        get
+        {
+            if (_tradeForm.Side != TradeSide.Sell) return null;
+            if (_tradeForm.Quantity <= 0) return null;
+            if (_tradeCurrentPos is null || _tradeCurrentPos.Quantity == 0)
+                return "Bu sembolde hiç pozisyon yok; satış yapamazsın.";
+            if (_tradeForm.Quantity > _tradeCurrentPos.Quantity)
+                return $"Yetersiz pozisyon. Satılmaya çalışılan: {_tradeForm.Quantity:N4}, mevcut: {_tradeCurrentPos.Quantity:N4}.";
+            return null;
+        }
+    }
+
+    private class TradeFormModel
+    {
+        public string AssetSymbol { get; set; } = "";
+        public TradeSide Side { get; set; } = TradeSide.Buy;
+        public decimal Quantity { get; set; }
+        public decimal Price { get; set; }
+        public decimal Fee { get; set; }
+        public DateTime ExecutedAt { get; set; } = DateTime.UtcNow;
+        public string? Notes { get; set; }
+    }
+
+    private void OpenTradeModal()
+    {
+        _tradeForm = new TradeFormModel();
+        _tradeFormError = null;
+        _tradeQuote = null;
+        _tradeCurrentPos = null;
+        _tradeModalOpen = true;
+    }
+
+    private void CloseTradeModal() => _tradeModalOpen = false;
+
+    private async Task OnTradeAssetResolved(AssetDto asset)
+    {
+        _tradeForm.AssetSymbol = asset.Symbol;
+        _tradeCurrentPos = _positions?.FirstOrDefault(p => p.AssetSymbol == asset.Symbol);
+        _tradeQuote = null;
+        _tradeLoadingQuote = true;
+        StateHasChanged();
+        try
+        {
+            _tradeQuote = await Api.GetQuoteAsync(asset.Symbol);
+            if (_tradeForm.Price == 0 && _tradeQuote is not null) _tradeForm.Price = _tradeQuote.Current;
+        }
+        catch (Exception ex) { _tradeFormError = $"Fiyat alınamadı: {ex.Message}"; }
+        finally { _tradeLoadingQuote = false; StateHasChanged(); }
+    }
+
+    private void UseTradeQuotePrice()
+    {
+        if (_tradeQuote is not null) _tradeForm.Price = _tradeQuote.Current;
+    }
+
+    private async Task SaveTradeAsync()
+    {
+        _tradeFormError = null; _tradeSaving = true; StateHasChanged();
+        try
+        {
+            await Api.CreateTradeAsync(Store.SelectedId!.Value, new CreateTradeRequest(
+                _tradeForm.AssetSymbol, _tradeForm.Side, _tradeForm.Quantity, _tradeForm.Price,
+                _tradeForm.Fee, DateTime.SpecifyKind(_tradeForm.ExecutedAt, DateTimeKind.Utc),
+                _tradeForm.Notes));
+            _tradeModalOpen = false;
+            _lastLoadedId = null;
+            await LoadIfNeeded();
+        }
+        catch (Exception ex) { _tradeFormError = ex.Message; }
+        finally { _tradeSaving = false; StateHasChanged(); }
     }
 }
