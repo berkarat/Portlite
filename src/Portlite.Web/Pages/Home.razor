@@ -206,7 +206,7 @@ else
 
         <div class="panel hero-chart-card">
             <div class="eyebrow" style="margin-bottom:8px;">
-                Performans @(_benchmarkSeries.Count > 0 ? "· vs SPY" : "")
+                Performans @(_benchmarkSeries.Count > 0 || _qqqBenchmarkSeries.Count > 0 ? "· vs SPY / QQQ" : "")
             </div>
             @if (_perfSeries.Count <= 1)
             {
@@ -216,7 +216,7 @@ else
             }
             else
             {
-                <RadzenChart Style="height:200px;">
+                <RadzenChart Style="height:240px;">
                     <RadzenLineSeries TItem="PerfPoint" Data="@_perfSeries"
                                       CategoryProperty="Date" ValueProperty="Value"
                                       Title="Portföy" LineType="LineType.Solid" Smooth="false"
@@ -232,10 +232,64 @@ else
                             <RadzenMarkers MarkerType="MarkerType.None" />
                         </RadzenLineSeries>
                     }
+                    @if (_qqqBenchmarkSeries.Count > 1)
+                    {
+                        <RadzenLineSeries TItem="PerfPoint" Data="@_qqqBenchmarkSeries"
+                                          CategoryProperty="Date" ValueProperty="Value"
+                                          Title="QQQ" LineType="LineType.Dotted" Smooth="false"
+                                          RenderingOrder="2">
+                            <RadzenMarkers MarkerType="MarkerType.None" />
+                        </RadzenLineSeries>
+                    }
                     <RadzenCategoryAxis Padding="16" FormatString="{0:dd MMM}" />
                     <RadzenValueAxis FormatString="{0:N1}%" />
                     <RadzenLegend Position="LegendPosition.Bottom" />
                 </RadzenChart>
+
+                @* Benchmark comparison table *@
+                <div class="benchmark-table" style="margin-top:12px; font-size:12px;">
+                    <table class="dt dt--compact" style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Portföy</th>
+                                <th>SPY</th>
+                                <th>QQQ</th>
+                                <th>Alpha (SPY)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="color:var(--text-muted);">Hafta</td>
+                                <td class="num @Format.DeltaClassPct(WeekReturnPct)">@Format.SignedPct(WeekReturnPct)</td>
+                                <td class="num @Format.DeltaClassPct(_spyWeekPct)">@Format.SignedPct(_spyWeekPct)</td>
+                                <td class="num @Format.DeltaClassPct(_qqqWeekPct)">@Format.SignedPct(_qqqWeekPct)</td>
+                                <td class="num @Format.DeltaClassPct(AlphaWeek)">@Format.SignedPct(AlphaWeek)</td>
+                            </tr>
+                            <tr>
+                                <td style="color:var(--text-muted);">MTD</td>
+                                <td class="num @Format.DeltaClassPct(MtdReturnPct)">@Format.SignedPct(MtdReturnPct)</td>
+                                <td class="num @Format.DeltaClassPct(_spyMtdPct)">@Format.SignedPct(_spyMtdPct)</td>
+                                <td class="num @Format.DeltaClassPct(_qqqMtdPct)">@Format.SignedPct(_qqqMtdPct)</td>
+                                <td class="num @Format.DeltaClassPct(AlphaMtd)">@Format.SignedPct(AlphaMtd)</td>
+                            </tr>
+                            <tr>
+                                <td style="color:var(--text-muted);">YTD</td>
+                                <td class="num @Format.DeltaClassPct(_kpi?.YtdChangePercent)">@Format.SignedPct(_kpi?.YtdChangePercent)</td>
+                                <td class="num @Format.DeltaClassPct(_spyYtdPct)">@Format.SignedPct(_spyYtdPct)</td>
+                                <td class="num @Format.DeltaClassPct(_qqqYtdPct)">@Format.SignedPct(_qqqYtdPct)</td>
+                                <td class="num @Format.DeltaClassPct(AlphaYtd)">@Format.SignedPct(AlphaYtd)</td>
+                            </tr>
+                            <tr>
+                                <td style="color:var(--text-muted);">All Time</td>
+                                <td class="num @Format.DeltaClassPct(_kpi?.AllTimePnLPercent)">@Format.SignedPct(_kpi?.AllTimePnLPercent)</td>
+                                <td class="num @Format.DeltaClassPct(_spyAllTimePct)">@Format.SignedPct(_spyAllTimePct)</td>
+                                <td class="num @Format.DeltaClassPct(_qqqAllTimePct)">@Format.SignedPct(_qqqAllTimePct)</td>
+                                <td class="num @Format.DeltaClassPct(AlphaAllTime)">@Format.SignedPct(AlphaAllTime)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             }
         </div>
     </div>
@@ -687,6 +741,12 @@ else
     private decimal? _spyAllTimePct;
     private decimal? _qqqAllTimePct;
 
+    // Alpha = Portfolio return - SPY return
+    private decimal? AlphaWeek => WeekReturnPct.HasValue && _spyWeekPct.HasValue ? WeekReturnPct - _spyWeekPct : null;
+    private decimal? AlphaMtd => MtdReturnPct.HasValue && _spyMtdPct.HasValue ? MtdReturnPct - _spyMtdPct : null;
+    private decimal? AlphaYtd => _kpi?.YtdChangePercent is not null && _spyYtdPct.HasValue ? _kpi.YtdChangePercent - _spyYtdPct : null;
+    private decimal? AlphaAllTime => _kpi?.AllTimePnLPercent is not null && _spyAllTimePct.HasValue ? _kpi.AllTimePnLPercent - _spyAllTimePct : null;
+
     // Portfolio period returns
     private decimal? WeekReturnPct
     {
@@ -1105,6 +1165,7 @@ else
     {
         _perfSeries = new();
         _benchmarkSeries = new();
+        _qqqBenchmarkSeries = new();
 
         var portfolioPoints = snaps
             .OrderBy(s => s.Date)
@@ -1122,21 +1183,43 @@ else
             .Select(p => new PerfPoint { Date = p.Date, Value = (p.Value - baseValue) / baseValue * 100m })
             .ToList();
 
-        if (spy.Count == 0) return;
-
-        // Benchmark: align to portfolio's start date
         var startDate = DateOnly.FromDateTime(portfolioPoints[0].Date);
-        var spyAligned = spy.Where(p => p.Date >= startDate).OrderBy(p => p.Date).ToList();
-        if (spyAligned.Count < 2) return;
-        var spyBase = spyAligned[0].Close;
-        if (spyBase <= 0) return;
-        _benchmarkSeries = spyAligned
-            .Select(p => new PerfPoint
+
+        // SPY benchmark
+        if (spy.Count > 0)
+        {
+            var spyAligned = spy.Where(p => p.Date >= startDate).OrderBy(p => p.Date).ToList();
+            if (spyAligned.Count >= 2)
             {
-                Date = p.Date.ToDateTime(TimeOnly.MinValue),
-                Value = (p.Close - spyBase) / spyBase * 100m
-            })
-            .ToList();
+                var spyBase = spyAligned[0].Close;
+                if (spyBase > 0)
+                    _benchmarkSeries = spyAligned
+                        .Select(p => new PerfPoint
+                        {
+                            Date = p.Date.ToDateTime(TimeOnly.MinValue),
+                            Value = (p.Close - spyBase) / spyBase * 100m
+                        })
+                        .ToList();
+            }
+        }
+
+        // QQQ benchmark
+        if (_qqqHistory.Count > 0)
+        {
+            var qqqAligned = _qqqHistory.Where(p => p.Date >= startDate).OrderBy(p => p.Date).ToList();
+            if (qqqAligned.Count >= 2)
+            {
+                var qqqBase = qqqAligned[0].Close;
+                if (qqqBase > 0)
+                    _qqqBenchmarkSeries = qqqAligned
+                        .Select(p => new PerfPoint
+                        {
+                            Date = p.Date.ToDateTime(TimeOnly.MinValue),
+                            Value = (p.Close - qqqBase) / qqqBase * 100m
+                        })
+                        .ToList();
+            }
+        }
     }
 
     private void ComputeBenchmarkReturns()

@@ -183,7 +183,9 @@ public class ApiClient
     // ---------------- porttech ----------------
     public async Task<PorttechReportDto> GeneratePorttechAsync(Guid portfolioId)
     {
-        var res = await _http.PostAsync($"api/porttech/generate/{portfolioId}", null);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(4));
+        var req = new HttpRequestMessage(HttpMethod.Post, $"api/porttech/generate/{portfolioId}");
+        var res = await _http.SendAsync(req, cts.Token);
         await EnsureSuccess(res);
         return (await res.Content.ReadFromJsonAsync<PorttechReportDto>(JsonOpts))!;
     }

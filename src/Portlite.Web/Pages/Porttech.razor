@@ -30,6 +30,15 @@
 
 <PortfolioChips />
 
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="panel" style="border-left:4px solid var(--danger); margin-bottom:16px;">
+        <div class="panel__body--padded" style="color:var(--danger);">
+            <strong>Hata:</strong> @_errorMessage
+        </div>
+    </div>
+}
+
 @if (Store.Selected is null)
 {
     <div class="empty">Bir alt portföy seç.</div>
@@ -335,6 +344,7 @@ else
 
     private bool _loading;
     private bool _generating;
+    private string? _errorMessage;
     private List<PorttechReportDto>? _history;
     private PorttechReportDto? _selectedReport;
     private ParsedPorttechReport? _parsedReport;
@@ -374,6 +384,7 @@ else
     {
         if (Store.SelectedId is null) return;
         _generating = true;
+        _errorMessage = null;
         StateHasChanged();
 
         try
@@ -382,8 +393,13 @@ else
             _history = await Api.GetPorttechHistoryAsync(Store.SelectedId.Value, 20);
             ParseReport();
         }
+        catch (TaskCanceledException)
+        {
+            _errorMessage = "Rapor üretimi zaman aşımına uğradı. Sayfa yenilendiğinde rapor görünebilir.";
+        }
         catch (Exception ex)
         {
+            _errorMessage = $"Rapor üretilirken hata: {ex.Message}";
             Console.WriteLine($"Porttech generate error: {ex.Message}");
         }
         finally { _generating = false; StateHasChanged(); }
@@ -408,10 +424,24 @@ else
         }
         try
         {
+            var json = _selectedReport.ReportJson.Trim();
+            // Strip markdown code fences if AI wrapped them
+            if (json.StartsWith("```"))
+            {
+                var firstNewline = json.IndexOf('\n');
+                var lastFence = json.LastIndexOf("```");
+                if (firstNewline > 0 && lastFence > firstNewline)
+                    json = json[(firstNewline + 1)..lastFence].Trim();
+            }
             _parsedReport = System.Text.Json.JsonSerializer.Deserialize<ParsedPorttechReport>(
-                _selectedReport.ReportJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+                json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
         }
-        catch { _parsedReport = null; }
+        catch (Exception ex)
+        {
+            _parsedReport = null;
+            _errorMessage = $"Rapor parse hatası: {ex.Message}";
+            Console.WriteLine($"ParseReport error: {ex.Message}\nReportJson preview: {_selectedReport.ReportJson?[..Math.Min(200, _selectedReport.ReportJson?.Length ?? 0)]}");
+        }
     }
 
     private static string SeverityLabel(string s) => s switch
