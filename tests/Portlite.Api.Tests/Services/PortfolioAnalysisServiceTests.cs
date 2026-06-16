@@ -58,7 +58,7 @@ public class PortfolioAnalysisServiceTests
             priceStore,
             NullLogger<PortfolioSnapshotService>.Instance);
         return new PortfolioAnalysisService(
-            db, posCalc, snap, aiMock.Object,
+            db, posCalc, snap, Mock.Of<IHistoricalPriceProvider>(), aiMock.Object,
             NullLogger<PortfolioAnalysisService>.Instance);
     }
 

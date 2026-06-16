@@ -4,12 +4,18 @@
 @inject IJSRuntime Js
 @implements IDisposable
 
-<PageTitle>Portlite — Dashboard</PageTitle>
+<PageTitle>Portlite — Portfolio</PageTitle>
 
 <div class="page-title-row">
     <div class="page-title-row__main">
         <div class="eyebrow">@DateTime.Now.ToString("dd MMMM yyyy · dddd", _trCulture)</div>
-        <h1 class="page-title">Dashboard</h1>
+        <h1 class="page-title page-title--hero">
+            <span class="page-title__accent">Portfolio</span>
+            @if (Store.Selected is not null)
+            {
+                <span class="page-title__badge">@Store.Selected.Name</span>
+            }
+        </h1>
     </div>
     <div class="btn-row" style="margin-bottom:0; gap:10px; align-items:center;">
         <span class="market-chip @(MarketIsOpen ? "market-chip--open" : "")">
@@ -17,12 +23,6 @@
             <span>NYSE @(MarketIsOpen ? "Açık" : "Kapalı")</span>
             <span class="market-chip__hours">· @MarketHoursText</span>
         </span>
-        @if (_lastUpdated is not null)
-        {
-            <span class="last-update last-update--compact">
-                son: @_lastUpdated.Value.ToLocalTime().ToString("HH:mm:ss")
-            </span>
-        }
         <button class="btn btn--primary" @onclick="OpenTradeModal" disabled="@(Store.SelectedId is null)">+ Yeni İşlem</button>
         <button class="btn" @onclick="ManualRefreshAsync" disabled="@_isRefreshing">
             @(_isRefreshing ? "Yenileniyor…" : "Yenile")
@@ -72,6 +72,25 @@ else
         </div>
     }
 
+    <!-- FİYATLAR CANLI BANDI -->
+    <div class="live-banner @(MarketIsOpen ? "live-banner--on" : "live-banner--off")">
+        <span class="live-banner__status">
+            <span class="live-banner__dot"></span>
+            @(MarketIsOpen ? "FİYATLAR CANLI" : "FİYATLAR DURAKLADI")
+        </span>
+        <span class="live-banner__sep">|</span>
+        <span class="live-banner__item">Son güncelleme: <strong>@LiveLastUpdateText</strong></span>
+        <span class="live-banner__sep">|</span>
+        @if (MarketIsOpen)
+        {
+            <span class="live-banner__item">Sonraki güncelleme: <strong>@LiveNextUpdateText</strong></span>
+        }
+        else
+        {
+            <span class="live-banner__item">@MarketHoursText</span>
+        }
+    </div>
+
     <!-- TOPLAM PORTFÖY -->
     <div class="panel" style="padding:24px 28px; margin-bottom:20px;">
         <div class="eyebrow" style="margin-bottom:8px;">TOPLAM PORTFÖY</div>
@@ -113,7 +132,7 @@ else
     {
         <div class="kpi-grid" style="margin-bottom:24px;">
             <div class="kpi">
-                <div class="kpi__label"><span class="kpi__label-text">HAFTA (SON 5 İŞLEM GÜNÜ)</span></div>
+                <div class="kpi__label"><span class="kpi__label-text">SON 7 GÜN</span></div>
                 <div class="kpi__value @Format.DeltaClassPct(WeekReturnPct)">@Format.SignedPct(WeekReturnPct)</div>
                 <div class="kpi__sub num">
                     @if (WeekReturnAmount != 0) { <text>@(WeekReturnAmount > 0 ? "+" : "")$@Math.Abs(WeekReturnAmount).ToString("N0")</text> }
@@ -150,9 +169,9 @@ else
             </div>
         </div>
     }
+    <div class="dash-trio">
 
-    <div class="hero-grid" style="grid-template-columns: 1fr 1.6fr;">
-
+        <!-- YÜKSELENLER / DÜŞENLER -->
         <div class="panel hero-movers">
             @{ var movers = TopMovers; }
             @if (movers.gainers.Count == 0 && movers.losers.Count == 0)
@@ -161,7 +180,7 @@ else
             }
             else
             {
-                <div class="hero-movers__grid">
+                <div class="hero-movers__stack">
                     <div>
                         <div class="eyebrow">Yükselenler · @movers.gainers.Count</div>
                         <div class="hero-movers__list">
@@ -204,40 +223,119 @@ else
             }
         </div>
 
-        <div class="panel hero-chart-card">
-            <div class="eyebrow" style="margin-bottom:8px;">
-                Performans @(_benchmarkSeries.Count > 0 || _qqqBenchmarkSeries.Count > 0 ? "· vs SPY / QQQ" : "")
+        <!-- TEMA DAĞILIMI -->
+        @if (ThemeAllocationData.Count > 0)
+        {
+            <div class="panel tema-dist tema-dist--stack">
+                <div class="panel__head">
+                    <div>
+                        <div class="section-title">Tema Dağılımı</div>
+                        <div class="eyebrow">Tema/sektör kırılımı</div>
+                    </div>
+                    <button class="btn btn--ghost btn--sm" @onclick="OpenThemeModal">Düzenle</button>
+                </div>
+                <div class="panel__body--padded">
+                    <div class="tema-dist__grid">
+                        <div class="tema-dist__chart">
+                            <div class="tema-donut" style="background:@ThemeDonutGradient;"></div>
+                            <div class="tema-dist__center">
+                                <div class="tema-dist__center-label">Toplam</div>
+                                <div class="tema-dist__center-value num">@Mask("$" + ThemeAllocationTotal.ToString("N0"))</div>
+                            </div>
+                        </div>
+                        <div class="tema-dist__list">
+                            @{ var tIdx = 0; }
+                            @foreach (var slice in ThemeAllocationData)
+                            {
+                                var color = ThemePalette[tIdx % ThemePalette.Length];
+                                tIdx++;
+                                <div class="tema-row">
+                                    <span class="tema-row__name">
+                                        <span class="tema-row__dot" style="background:@color;"></span>
+                                        @slice.Theme
+                                    </span>
+                                    <span class="tema-row__val num">@Mask("$" + slice.Value.ToString("N0"))</span>
+                                    <span class="tema-row__pct num">@(((slice.Value / ThemeAllocationTotal) * 100).ToString("N1"))%</span>
+                                </div>
+                            }
+                            <div class="tema-row tema-row--total">
+                                <span class="tema-row__name">TOPLAM</span>
+                                <span class="tema-row__val num">@Mask("$" + ThemeAllocationTotal.ToString("N0"))</span>
+                                <span class="tema-row__pct num">100%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            @if (_perfSeries.Count <= 1)
+        }
+
+        <!-- TOPLAM PORTFÖY PERFORMANSI -->
+        <div class="hero-chart-card panel">
+            <div class="perf-head">
+                <div>
+                    <div class="section-title">Toplam Portföy Performansı</div>
+                    <div class="eyebrow">@PerfPeriodLabel · portföy değeri</div>
+                </div>
+                <div class="perf-toggle">
+                    @foreach (var period in PerfPeriods)
+                    {
+                        <button class="perf-toggle__btn @(_perfPeriod == period.Key ? "is-active" : "")"
+                                @onclick="() => SetPerfPeriod(period.Key)">@period.Label</button>
+                    }
+                </div>
+            </div>
+
+            @if (_perfPortfolioSeries.Count <= 1)
             {
                 <div class="empty" style="padding:30px 0;font-size:12px;">
-                    Veri birikiyor — 2+ snapshot gerekli (şu an @_perfSeries.Count)
+                    Veri birikiyor — 2+ snapshot gerekli
                 </div>
             }
             else
             {
+                <div class="perf-stats">
+                    <div class="perf-stat">
+                        <div class="perf-stat__lbl">ŞİMDİ</div>
+                        <div class="perf-stat__val num">@Mask("$" + (_perfCurrentEquity ?? 0).ToString("N0"))</div>
+                        <div class="perf-stat__sub">@(_perfEndDate?.ToDateTime(TimeOnly.MinValue).ToString("d MMM yyyy", _trCulture))</div>
+                    </div>
+                    <div class="perf-stat">
+                        <div class="perf-stat__lbl">@PerfStartBoxLabel</div>
+                        <div class="perf-stat__val num">@Mask("$" + (_perfStartEquity ?? 0).ToString("N0"))</div>
+                        <div class="perf-stat__sub">@(_perfStartDate?.ToDateTime(TimeOnly.MinValue).ToString("d MMM yyyy", _trCulture))</div>
+                    </div>
+                    <div class="perf-stat perf-stat--accent">
+                        <div class="perf-stat__lbl">DEĞİŞİM</div>
+                        <div class="perf-stat__val num @(_perfChangeAmount >= 0 ? "pos" : "neg")">
+                            @Mask((_perfChangeAmount >= 0 ? "+" : "−") + "$" + Math.Abs(_perfChangeAmount).ToString("N0"))
+                        </div>
+                        <div class="perf-stat__sub @(_perfChangeAmount >= 0 ? "pos" : "neg")">@Format.SignedPct(_perfChangePct)</div>
+                    </div>
+                </div>
+
                 <RadzenChart Style="height:240px;">
-                    <RadzenLineSeries TItem="PerfPoint" Data="@_perfSeries"
+                    <RadzenAreaSeries TItem="PerfPoint" Data="@_perfPortfolioSeries"
                                       CategoryProperty="Date" ValueProperty="Value"
-                                      Title="Portföy" LineType="LineType.Solid" Smooth="false"
+                                      Title="Portföy" Smooth="true"
+                                      Fill="@PerfFill" Stroke="@PerfStroke"
                                       RenderingOrder="0">
                         <RadzenMarkers MarkerType="MarkerType.None" />
-                    </RadzenLineSeries>
-                    @if (_benchmarkSeries.Count > 1)
+                    </RadzenAreaSeries>
+                    @if (_perfSpySeries.Count > 1)
                     {
-                        <RadzenLineSeries TItem="PerfPoint" Data="@_benchmarkSeries"
+                        <RadzenLineSeries TItem="PerfPoint" Data="@_perfSpySeries"
                                           CategoryProperty="Date" ValueProperty="Value"
                                           Title="SPY" LineType="LineType.Dashed" Smooth="false"
-                                          RenderingOrder="1">
+                                          Stroke="#94a3b8" RenderingOrder="1">
                             <RadzenMarkers MarkerType="MarkerType.None" />
                         </RadzenLineSeries>
                     }
-                    @if (_qqqBenchmarkSeries.Count > 1)
+                    @if (_perfQqqSeries.Count > 1)
                     {
-                        <RadzenLineSeries TItem="PerfPoint" Data="@_qqqBenchmarkSeries"
+                        <RadzenLineSeries TItem="PerfPoint" Data="@_perfQqqSeries"
                                           CategoryProperty="Date" ValueProperty="Value"
                                           Title="QQQ" LineType="LineType.Dotted" Smooth="false"
-                                          RenderingOrder="2">
+                                          Stroke="#64748b" RenderingOrder="2">
                             <RadzenMarkers MarkerType="MarkerType.None" />
                         </RadzenLineSeries>
                     }
@@ -245,51 +343,6 @@ else
                     <RadzenValueAxis FormatString="{0:N1}%" />
                     <RadzenLegend Position="LegendPosition.Bottom" />
                 </RadzenChart>
-
-                @* Benchmark comparison table *@
-                <div class="benchmark-table" style="margin-top:12px; font-size:12px;">
-                    <table class="dt dt--compact" style="width:100%;">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th>Portföy</th>
-                                <th>SPY</th>
-                                <th>QQQ</th>
-                                <th>Alpha (SPY)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td style="color:var(--text-muted);">Hafta</td>
-                                <td class="num @Format.DeltaClassPct(WeekReturnPct)">@Format.SignedPct(WeekReturnPct)</td>
-                                <td class="num @Format.DeltaClassPct(_spyWeekPct)">@Format.SignedPct(_spyWeekPct)</td>
-                                <td class="num @Format.DeltaClassPct(_qqqWeekPct)">@Format.SignedPct(_qqqWeekPct)</td>
-                                <td class="num @Format.DeltaClassPct(AlphaWeek)">@Format.SignedPct(AlphaWeek)</td>
-                            </tr>
-                            <tr>
-                                <td style="color:var(--text-muted);">MTD</td>
-                                <td class="num @Format.DeltaClassPct(MtdReturnPct)">@Format.SignedPct(MtdReturnPct)</td>
-                                <td class="num @Format.DeltaClassPct(_spyMtdPct)">@Format.SignedPct(_spyMtdPct)</td>
-                                <td class="num @Format.DeltaClassPct(_qqqMtdPct)">@Format.SignedPct(_qqqMtdPct)</td>
-                                <td class="num @Format.DeltaClassPct(AlphaMtd)">@Format.SignedPct(AlphaMtd)</td>
-                            </tr>
-                            <tr>
-                                <td style="color:var(--text-muted);">YTD</td>
-                                <td class="num @Format.DeltaClassPct(_kpi?.YtdChangePercent)">@Format.SignedPct(_kpi?.YtdChangePercent)</td>
-                                <td class="num @Format.DeltaClassPct(_spyYtdPct)">@Format.SignedPct(_spyYtdPct)</td>
-                                <td class="num @Format.DeltaClassPct(_qqqYtdPct)">@Format.SignedPct(_qqqYtdPct)</td>
-                                <td class="num @Format.DeltaClassPct(AlphaYtd)">@Format.SignedPct(AlphaYtd)</td>
-                            </tr>
-                            <tr>
-                                <td style="color:var(--text-muted);">All Time</td>
-                                <td class="num @Format.DeltaClassPct(_kpi?.AllTimePnLPercent)">@Format.SignedPct(_kpi?.AllTimePnLPercent)</td>
-                                <td class="num @Format.DeltaClassPct(_spyAllTimePct)">@Format.SignedPct(_spyAllTimePct)</td>
-                                <td class="num @Format.DeltaClassPct(_qqqAllTimePct)">@Format.SignedPct(_qqqAllTimePct)</td>
-                                <td class="num @Format.DeltaClassPct(AlphaAllTime)">@Format.SignedPct(AlphaAllTime)</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
             }
         </div>
     </div>
@@ -298,10 +351,10 @@ else
         <div class="panel__head">
             <div>
                 <div class="section-title">Pozisyonlar</div>
-                <div class="eyebrow">@(_positions?.Count ?? 0) açık · @Store.Selected.Name</div>
+                <div class="eyebrow">@VisiblePositions.Count açık · @Store.Selected.Name</div>
             </div>
         </div>
-        @if (_positions is null || _positions.Count == 0)
+        @if (VisiblePositions.Count == 0)
         {
             <div class="empty">Henüz pozisyon yok. <a href="trades">Trade ekle.</a></div>
         }
@@ -322,7 +375,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var p in _positions)
+                    @foreach (var p in VisiblePositions)
                     {
                         <tr draggable="true"
                             class="@(_draggingSymbol == p.AssetSymbol ? "row-dragging" : "")"
@@ -398,81 +451,6 @@ else
                 </tbody>
             </table>
         }
-    </div>
-
-    <div class="dash-bottom" style="margin-top:24px;">
-        @if (AllocationData.Count > 0)
-        {
-            <div class="panel">
-                <div class="panel__head">
-                    <div>
-                        <div class="section-title">Dağılım</div>
-                        <div class="eyebrow">Sembol ağırlıkları (cash dahil)</div>
-                    </div>
-                </div>
-                <div class="panel__body--padded">
-                    <RadzenChart Style="height:240px;">
-                        <RadzenDonutSeries Data="@AllocationData"
-                                           CategoryProperty="Symbol"
-                                           ValueProperty="Value"
-                                           TItem="AllocationSlice">
-                            <TitleTemplate>
-                                <div style="text-align:center;">
-                                    <div style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;">Toplam</div>
-                                    <div style="font-size:18px;font-weight:700;color:var(--text-primary);font-family:var(--font-mono);">$@AllocationTotal.ToString("N0")</div>
-                                </div>
-                            </TitleTemplate>
-                        </RadzenDonutSeries>
-                        <RadzenLegend Position="LegendPosition.Bottom" />
-                    </RadzenChart>
-                </div>
-                <div class="alloc-list">
-                    @foreach (var slice in AllocationData)
-                    {
-                        <div class="alloc-row">
-                            <span class="alloc-row__sym">@slice.Symbol</span>
-                            <span class="alloc-row__val num">$@slice.Value.ToString("N2")</span>
-                            <span class="alloc-row__pct num">@(((slice.Value / AllocationTotal) * 100).ToString("N1"))%</span>
-                        </div>
-                    }
-                </div>
-            </div>
-        }
-
-        <div class="panel">
-            <div class="panel__head">
-                <div>
-                    <div class="section-title">Snapshot</div>
-                    <div class="eyebrow">@(_snapshot is null ? "—" : Format.ShortDate(_snapshot.Date))</div>
-                </div>
-            </div>
-            <div class="panel__body--padded">
-                @if (_snapshot is null)
-                {
-                    <div class="empty" style="padding:20px 0;">Henüz snapshot yok</div>
-                }
-                else
-                {
-                    <div style="display:flex;flex-direction:column;gap:14px;">
-                        <SnapshotRow Label="Market Value" Value="@Format.Money(_snapshot.MarketValue)" />
-                        <SnapshotRow Label="Cost Basis" Value="@Format.Money(_snapshot.CostBasis)" />
-                        <SnapshotRow Label="Cash" Value="@Format.Money(_snapshot.CashBalance)" />
-                        <SnapshotRow Label="Realized PnL" Value="@Format.Money(_snapshot.RealizedPnL)" Tone="@Format.DeltaClass(_snapshot.RealizedPnL.Amount)" />
-                        <SnapshotRow Label="Unrealized PnL" Value="@Format.Money(_snapshot.UnrealizedPnL)" Tone="@Format.DeltaClass(_snapshot.UnrealizedPnL.Amount)" />
-                        <hr class="hr" style="margin:6px 0;" />
-                        <SnapshotRow Label="Toplam Equity" Value="@Format.Money(_snapshot.TotalEquity)" Bold="true" />
-                        @if (_snapshot.MissingPriceSymbols.Any())
-                        {
-                            <div class="kpi__missing">eksik fiyat: @string.Join(", ", _snapshot.MissingPriceSymbols)</div>
-                        }
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
-
-    <div style="margin-top:24px;">
-        <NewsPanel PortfolioId="@Store.SelectedId" />
     </div>
 
     <div class="panel" style="margin-top:24px;">
@@ -686,6 +664,47 @@ else
     </Footer>
 </Modal>
 
+<Modal IsOpen="@_themeModalOpen" Title="Temaları Düzenle" OnClose="CloseThemeModal" Width="560">
+    <Body>
+        <datalist id="theme-suggestions">
+            @foreach (var t in KnownThemes)
+            {
+                <option value="@t"></option>
+            }
+        </datalist>
+        @if (_themeEditSymbols.Count == 0)
+        {
+            <div class="empty" style="padding:20px 0;">Tema atanacak açık pozisyon yok.</div>
+        }
+        else
+        {
+            <div class="eyebrow" style="margin-bottom:10px;">Her sembole bir tema/sektör etiketi gir (örn. "Yapay Zeka", "Enerji").</div>
+            @foreach (var sym in _themeEditSymbols)
+            {
+                <div class="field--row" style="align-items:center; gap:12px; margin-bottom:8px;">
+                    <div style="min-width:90px; font-weight:600; font-family:var(--font-mono);">@sym</div>
+                    <div class="field" style="flex:1; margin:0;">
+                        <input list="theme-suggestions" placeholder="Tema…"
+                               value="@(_themeEdits.TryGetValue(sym, out var v) ? v : "")"
+                               @oninput="@(e => _themeEdits[sym] = e.Value?.ToString() ?? "")" />
+                    </div>
+                </div>
+            }
+        }
+        @if (_themeError is not null) { <div class="alert alert--err" style="margin-top:10px;">@_themeError</div> }
+    </Body>
+    <Footer>
+        <button class="btn btn--ghost" @onclick="AutoFillThemesAsync" disabled="@(_themeSaving || _themeAutoFilling)">
+            @(_themeAutoFilling ? "Çekiliyor…" : "🔄 Finnhub'dan Otomatik Doldur")
+        </button>
+        <div style="flex:1;"></div>
+        <button class="btn btn--ghost" @onclick="CloseThemeModal">İptal</button>
+        <button class="btn btn--primary" @onclick="SaveThemesAsync" disabled="@(_themeSaving || _themeAutoFilling)">
+            @(_themeSaving ? "Kaydediliyor…" : "Kaydet")
+        </button>
+    </Footer>
+</Modal>
+
 @code {
     private bool _loading = true;
     private bool _hidePrices;
@@ -702,7 +721,10 @@ else
     private Dictionary<string, PorttechBadgeInfo> _porttechBadges = new();
 
     private System.Threading.Timer? _pollTimer;
-    private const int PollIntervalSeconds = 30;
+    private const int PollIntervalSeconds = 300;
+
+    // Re-renders the live-prices banner so "X sn/dk önce" stays current.
+    private System.Threading.Timer? _uiTicker;
 
     private List<string> _positionOrder = new();
     private string? _draggingSymbol;
@@ -868,6 +890,178 @@ else
 
     private decimal AllocationTotal => AllocationData.Sum(s => s.Value);
 
+    // Ana ekranda yalnızca açık (adet > 0) pozisyonları göster; kapanmış olanlar gizli.
+    private List<PositionDto> VisiblePositions =>
+        (_positions ?? new List<PositionDto>()).Where(p => p.Quantity > 0).ToList();
+
+    // ─── Tema Dağılımı ─────────────────────────────────────────────
+    public class ThemeSlice
+    {
+        public string Theme { get; set; } = "";
+        public decimal Value { get; set; }
+    }
+
+    private const string UnclassifiedTheme = "Sınıflandırılmamış";
+
+    private static readonly string[] ThemePalette =
+    {
+        "#a78bfa", "#c084fc", "#60a5fa", "#fbbf24", "#34d399",
+        "#f472b6", "#2dd4bf", "#38bdf8", "#fb923c", "#e879f9",
+        "#f87171", "#facc15", "#4ade80", "#818cf8", "#fda4af"
+    };
+
+    private List<ThemeSlice> ThemeAllocationData
+    {
+        get
+        {
+            var list = new List<ThemeSlice>();
+            if (_positions is not null)
+            {
+                var grouped = _positions
+                    .Where(p => p.MarketValue.HasValue && p.MarketValue.Value > 0)
+                    .GroupBy(p => NormalizeTheme(p.Theme))
+                    .Select(g => new ThemeSlice { Theme = g.Key, Value = g.Sum(p => p.MarketValue!.Value) })
+                    .OrderByDescending(s => s.Value);
+                list.AddRange(grouped);
+            }
+            if (_snapshot is not null && _snapshot.CashBalance.Amount > 0)
+                list.Add(new ThemeSlice { Theme = "Nakit", Value = _snapshot.CashBalance.Amount });
+            return list;
+        }
+    }
+
+    // Tema adını normalize eder: kenar boşlukları, fazla iç boşluklar ve "/" etrafındaki
+    // boşluk farklarını tek bir standarda indirir (ör. "Fotonik /PHOTONICS" == "Fotonik / PHOTONICS").
+    private static string NormalizeTheme(string? theme)
+    {
+        if (string.IsNullOrWhiteSpace(theme)) return UnclassifiedTheme;
+        var collapsed = System.Text.RegularExpressions.Regex.Replace(theme.Trim(), @"\s*/\s*", " / ");
+        collapsed = System.Text.RegularExpressions.Regex.Replace(collapsed, @"\s+", " ");
+        return collapsed;
+    }
+
+    private decimal ThemeAllocationTotal => ThemeAllocationData.Sum(s => s.Value);
+
+    // Donut'u saf CSS conic-gradient olarak üretir: renkler tema listesiyle birebir aynı sırada.
+    private string ThemeDonutGradient
+    {
+        get
+        {
+            var data = ThemeAllocationData;
+            var total = data.Sum(s => s.Value);
+            if (total <= 0) return "conic-gradient(var(--border-subtle) 0deg 360deg)";
+
+            var sb = new System.Text.StringBuilder("conic-gradient(");
+            decimal cumulative = 0m;
+            for (int i = 0; i < data.Count; i++)
+            {
+                var color = ThemePalette[i % ThemePalette.Length];
+                var startDeg = cumulative / total * 360m;
+                cumulative += data[i].Value;
+                var endDeg = cumulative / total * 360m;
+                if (i > 0) sb.Append(", ");
+                sb.Append($"{color} {startDeg.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}deg {endDeg.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}deg");
+            }
+            sb.Append(')');
+            return sb.ToString();
+        }
+    }
+
+    private IEnumerable<string> KnownThemes =>
+        (_positions ?? new List<PositionDto>())
+            .Select(p => p.Theme)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t);
+
+    private bool _themeModalOpen;
+    private bool _themeSaving;
+    private bool _themeAutoFilling;
+    private string? _themeError;
+    private List<string> _themeEditSymbols = new();
+    private Dictionary<string, string> _themeEdits = new();
+    private void OpenThemeModal()
+    {
+        _themeError = null;
+        _themeEditSymbols = (_positions ?? new List<PositionDto>())
+            .Where(p => p.Quantity > 0)
+            .Select(p => p.AssetSymbol)
+            .Distinct()
+            .OrderBy(s => s)
+            .ToList();
+        _themeEdits = (_positions ?? new List<PositionDto>())
+            .Where(p => p.Quantity > 0)
+            .GroupBy(p => p.AssetSymbol)
+            .ToDictionary(g => g.Key, g => g.First().Theme ?? "");
+        _themeModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void CloseThemeModal()
+    {
+        _themeModalOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task AutoFillThemesAsync()
+    {
+        _themeAutoFilling = true;
+        _themeError = null;
+        StateHasChanged();
+        try
+        {
+            // Finnhub'dan tüm açık pozisyonlar için sektörü çek (boş olanların üzerine de yaz).
+            await Api.AutoAssignThemesAsync(_themeEditSymbols, overwrite: true);
+
+            // Güncel temaları geri al ve formu tazele.
+            var assets = await Api.ListAssetsAsync() ?? new();
+            var bySymbol = assets
+                .GroupBy(a => a.Symbol)
+                .ToDictionary(g => g.Key, g => g.First().Theme ?? "");
+            foreach (var sym in _themeEditSymbols)
+                if (bySymbol.TryGetValue(sym, out var t))
+                    _themeEdits[sym] = t;
+        }
+        catch (Exception ex)
+        {
+            _themeError = ex.Message;
+        }
+        finally
+        {
+            _themeAutoFilling = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveThemesAsync()
+    {
+        _themeSaving = true;
+        _themeError = null;
+        StateHasChanged();
+        try
+        {
+            foreach (var sym in _themeEditSymbols)
+            {
+                var newTheme = _themeEdits.TryGetValue(sym, out var v) ? v?.Trim() : null;
+                var current = _positions?.FirstOrDefault(p => p.AssetSymbol == sym)?.Theme ?? "";
+                if ((newTheme ?? "") == current) continue; // unchanged
+                await Api.UpdateAssetThemeAsync(sym, string.IsNullOrWhiteSpace(newTheme) ? null : newTheme);
+            }
+            _themeModalOpen = false;
+            await LoadAsync(initial: false);
+        }
+        catch (Exception ex)
+        {
+            _themeError = ex.Message;
+        }
+        finally
+        {
+            _themeSaving = false;
+            StateHasChanged();
+        }
+    }
+
     private decimal? ThirtyDayReturnPct
     {
         get
@@ -936,6 +1130,35 @@ else
         }
     }
 
+    // ─── Fiyatlar canlı bandı ──────────────────────────────────────
+    private string LiveLastUpdateText
+    {
+        get
+        {
+            if (_lastUpdated is null) return "—";
+            return _lastUpdated.Value.ToLocalTime().ToString("HH:mm");
+        }
+    }
+
+    private string LiveNextUpdateText
+    {
+        get
+        {
+            if (_lastUpdated is null) return "—";
+            var next = _lastUpdated.Value.AddSeconds(PollIntervalSeconds);
+            var remaining = next - DateTime.UtcNow;
+            if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
+            return $"~{next.ToLocalTime():HH:mm} (≈{RelativeForward(remaining)} sonra)";
+        }
+    }
+
+    private static string RelativeForward(TimeSpan span)
+    {
+        if (span.TotalSeconds < 60) return $"{Math.Max(1, (int)Math.Ceiling(span.TotalSeconds))} sn";
+        if (span.TotalMinutes < 60) return $"{(int)Math.Ceiling(span.TotalMinutes)} dk";
+        return $"{(int)Math.Ceiling(span.TotalHours)} sa";
+    }
+
     protected override async Task OnInitializedAsync()
     {
         Store.Changed += OnStoreChanged;
@@ -943,6 +1166,7 @@ else
         await LoadPositionOrderAsync();
         await LoadIfNeeded();
         StartPolling();
+        StartUiTicker();
     }
 
     private async Task LoadPositionOrderAsync()
@@ -1097,6 +1321,8 @@ else
             ComputeBenchmarkReturns();
             _ = LoadPorttechBadgesAsync(id);
 
+            _lastUpdated = DateTime.UtcNow;
+
             if (initial) _loading = false;
             StateHasChanged();
 
@@ -1159,7 +1385,18 @@ else
         StateHasChanged();
     }
 
-    private string Mask(string value) => _hidePrices ? "•••••" : value;
+    private string Mask(string value)
+    {
+        if (!_hidePrices) return value;
+        if (string.IsNullOrEmpty(value)) return value;
+
+        // Baştaki işaret/para birimi sembollerini koru (+, −, -, $, ₺), gerisini *** yap.
+        int i = 0;
+        while (i < value.Length && (value[i] is '+' or '-' or '−' or '$' or '₺' or '€' or '£' or ' '))
+            i++;
+        var prefix = value[..i];
+        return prefix + "***";
+    }
 
     private void BuildPerformanceSeries(List<PortfolioSnapshotDto> snaps, List<PricePointDto> spy)
     {
@@ -1220,7 +1457,130 @@ else
                         .ToList();
             }
         }
+
+        RebuildPerfView();
     }
+
+    // ─── Performans paneli (dönem seçici) ──────────────────────────
+    private static readonly (string Key, string Label)[] PerfPeriods =
+    {
+        ("1W", "1H"), ("MTD", "MTD"), ("1M", "1A"), ("3M", "3A"), ("YTD", "YTD"), ("ALL", "All")
+    };
+
+    private string _perfPeriod = "MTD";
+
+    private List<PerfPoint> _perfPortfolioSeries = new();
+    private List<PerfPoint> _perfSpySeries = new();
+    private List<PerfPoint> _perfQqqSeries = new();
+    private decimal? _perfCurrentEquity;
+    private decimal? _perfStartEquity;
+    private decimal _perfChangeAmount;
+    private decimal? _perfChangePct;
+    private DateOnly? _perfStartDate;
+    private DateOnly? _perfEndDate;
+
+    private string PerfStartBoxLabel => _perfPeriod switch
+    {
+        "1W" => "HAFTA BAŞI",
+        "MTD" => "AY BAŞI",
+        "1M" => "1 AY ÖNCE",
+        "3M" => "3 AY ÖNCE",
+        "YTD" => "YIL BAŞI",
+        _ => "BAŞLANGIÇ"
+    };
+
+    private string PerfPeriodLabel => _perfPeriod switch
+    {
+        "1W" => "Son 1 hafta",
+        "MTD" => "Bu ay",
+        "1M" => "Son 1 ay",
+        "3M" => "Son 3 ay",
+        "YTD" => $"{DateTime.Now.Year} başından beri",
+        _ => "Tüm zamanlar"
+    };
+
+    private string PerfStroke => _perfChangeAmount >= 0 ? "#22c55e" : "#ef4444";
+    private string PerfFill => _perfChangeAmount >= 0 ? "rgba(34,197,94,0.16)" : "rgba(239,68,68,0.16)";
+
+    private void SetPerfPeriod(string period)
+    {
+        _perfPeriod = period;
+        RebuildPerfView();
+        StateHasChanged();
+    }
+
+    private static DateOnly PerfPeriodStart(string period, DateOnly latest, DateOnly earliest) => period switch
+    {
+        "1W" => latest.AddDays(-7),
+        "MTD" => new DateOnly(latest.Year, latest.Month, 1),
+        "1M" => latest.AddMonths(-1),
+        "3M" => latest.AddMonths(-3),
+        "YTD" => new DateOnly(latest.Year, 1, 1),
+        _ => earliest
+    };
+
+    private static List<PerfPoint> BuildBenchmarkWindow(List<PricePointDto> history, DateOnly anchor)
+    {
+        var aligned = history.Where(p => p.Date >= anchor).OrderBy(p => p.Date).ToList();
+        if (aligned.Count < 2) return new();
+        var baseClose = aligned[0].Close;
+        if (baseClose <= 0) return new();
+        return aligned
+            .Select(p => new PerfPoint
+            {
+                Date = p.Date.ToDateTime(TimeOnly.MinValue),
+                Value = (p.Close - baseClose) / baseClose * 100m
+            })
+            .ToList();
+    }
+
+    private void RebuildPerfView()
+    {
+        _perfPortfolioSeries = new();
+        _perfSpySeries = new();
+        _perfQqqSeries = new();
+        _perfCurrentEquity = null;
+        _perfStartEquity = null;
+        _perfChangeAmount = 0;
+        _perfChangePct = null;
+        _perfStartDate = null;
+        _perfEndDate = null;
+
+        var snaps = _snapshots.OrderBy(s => s.Date).ToList();
+        if (snaps.Count == 0) return;
+
+        var latestDate = snaps[^1].Date;
+        var anchor = PerfPeriodStart(_perfPeriod, latestDate, snaps[0].Date);
+
+        var window = snaps.Where(s => s.Date >= anchor).ToList();
+        if (window.Count == 0) window = snaps;
+
+        // Dönem başı baz değeri: anchor'dan önceki/eşit son snapshot, yoksa penceredeki ilk.
+        var baseSnap = snaps.LastOrDefault(s => s.Date <= anchor) ?? window[0];
+        var baseValue = baseSnap.TotalEquity.Amount;
+
+        _perfStartEquity = baseValue;
+        _perfCurrentEquity = window[^1].TotalEquity.Amount;
+        _perfStartDate = baseSnap.Date;
+        _perfEndDate = window[^1].Date;
+        _perfChangeAmount = _perfCurrentEquity.Value - baseValue;
+        _perfChangePct = baseValue > 0 ? _perfChangeAmount / baseValue * 100m : null;
+
+        if (baseValue > 0)
+        {
+            _perfPortfolioSeries = window
+                .Select(s => new PerfPoint
+                {
+                    Date = s.Date.ToDateTime(TimeOnly.MinValue),
+                    Value = (s.TotalEquity.Amount - baseValue) / baseValue * 100m
+                })
+                .ToList();
+        }
+
+        _perfSpySeries = BuildBenchmarkWindow(_spyHistory, anchor);
+        _perfQqqSeries = BuildBenchmarkWindow(_qqqHistory, anchor);
+    }
+
 
     private void ComputeBenchmarkReturns()
     {
@@ -1331,6 +1691,16 @@ else
         }, null, TimeSpan.FromSeconds(PollIntervalSeconds), TimeSpan.FromSeconds(PollIntervalSeconds));
     }
 
+    private void StartUiTicker()
+    {
+        _uiTicker?.Dispose();
+        _uiTicker = new System.Threading.Timer(async _ =>
+        {
+            if (_loading || Store.SelectedId is null) return;
+            try { await InvokeAsync(StateHasChanged); } catch { }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
     private async Task LoadPorttechBadgesAsync(Guid portfolioId)
     {
         try
@@ -1410,6 +1780,7 @@ else
     {
         Store.Changed -= OnStoreChanged;
         _pollTimer?.Dispose();
+        _uiTicker?.Dispose();
         _flashCts?.Cancel();
         _flashCts?.Dispose();
     }

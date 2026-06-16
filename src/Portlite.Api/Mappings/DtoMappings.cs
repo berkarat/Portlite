@@ -12,7 +12,7 @@ public static class DtoMappings
 
     public static AssetDto ToDto(this Asset a) => new(
         a.Id, a.Symbol, a.Name, a.Type, a.Currency,
-        a.OptionDetail?.ToDto());
+        a.OptionDetail?.ToDto(), a.Theme);
 
     public static OptionDetailDto ToDto(this OptionDetail od) => new(
         od.UnderlyingSymbol, od.OptionType, od.Strike, od.Expiry, od.Multiplier);

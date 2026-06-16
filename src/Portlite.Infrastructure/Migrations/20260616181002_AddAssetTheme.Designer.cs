@@ -4,17 +4,20 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Portlite.Infrastructure.Persistence;
 
 #nullable disable
 
-namespace Portlite.Infrastructure.Persistence.Migrations
+namespace Portlite.Infrastructure.Migrations
 {
     [DbContext(typeof(PortliteDbContext))]
-    partial class PortliteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260616181002_AddAssetTheme")]
+    partial class AddAssetTheme
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

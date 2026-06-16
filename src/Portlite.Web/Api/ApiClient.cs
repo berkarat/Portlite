@@ -64,6 +64,25 @@ public class ApiClient
         return (await res.Content.ReadFromJsonAsync<AssetDto>(JsonOpts))!;
     }
 
+    public async Task<AssetDto> UpdateAssetThemeAsync(string symbol, string? theme)
+    {
+        var res = await _http.PutAsJsonAsync(
+            $"api/assets/{Uri.EscapeDataString(symbol)}/theme",
+            new UpdateAssetThemeRequest(theme), JsonOpts);
+        await EnsureSuccess(res);
+        return (await res.Content.ReadFromJsonAsync<AssetDto>(JsonOpts))!;
+    }
+
+    public async Task<int> AutoAssignThemesAsync(List<string>? symbols = null, bool overwrite = false)
+    {
+        var res = await _http.PostAsJsonAsync(
+            "api/assets/themes/auto",
+            new AutoThemeRequest(symbols, overwrite), JsonOpts);
+        await EnsureSuccess(res);
+        var result = await res.Content.ReadFromJsonAsync<AutoThemeResult>(JsonOpts);
+        return result?.Changed ?? 0;
+    }
+
     public Task<List<SymbolSearchHitDto>?> SearchSymbolsAsync(string query) =>
         _http.GetFromJsonAsync<List<SymbolSearchHitDto>>(
             $"api/assets/search?q={Uri.EscapeDataString(query)}", JsonOpts);

@@ -21,4 +21,5 @@ public record PositionDto(
     DateOnly? PriceAsOf,
     decimal? PreviousClose,
     decimal? DayChange,
-    decimal? DayChangePercent);
+    decimal? DayChangePercent,
+    string? Theme = null);

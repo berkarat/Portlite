@@ -53,11 +53,59 @@ public class AssetService
             Name = req.Name.Trim(),
             Type = req.Type,
             Currency = req.Currency,
+            Theme = string.IsNullOrWhiteSpace(req.Theme) ? null : req.Theme.Trim(),
             OptionDetail = req.OptionDetail?.ToDomain()
         };
         _db.Assets.Add(asset);
         await _db.SaveChangesAsync(ct);
         return asset.ToDto();
+    }
+
+    public async Task<AssetDto> UpdateThemeAsync(string symbol, string? theme, CancellationToken ct = default)
+    {
+        var sym = symbol.Trim().ToUpperInvariant();
+        var asset = await _db.Assets.FirstOrDefaultAsync(x => x.Symbol == sym, ct)
+            ?? throw new NotFoundException($"Asset '{sym}' not found.");
+        asset.Theme = string.IsNullOrWhiteSpace(theme) ? null : theme.Trim();
+        await _db.SaveChangesAsync(ct);
+        return asset.ToDto();
+    }
+
+    /// <summary>
+    /// Fills the Theme field from Finnhub's industry classification for the given symbols.
+    /// When overwrite=false, only assets without a theme are updated. Returns the number of assets changed.
+    /// </summary>
+    public async Task<int> AutoAssignThemesAsync(IEnumerable<string>? symbols, bool overwrite, CancellationToken ct = default)
+    {
+        var wanted = symbols?
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim().ToUpperInvariant())
+            .Distinct()
+            .ToList();
+
+        var query = _db.Assets.AsQueryable();
+        if (wanted is { Count: > 0 })
+            query = query.Where(a => wanted.Contains(a.Symbol));
+        if (!overwrite)
+            query = query.Where(a => a.Theme == null || a.Theme == "");
+
+        var assets = await query.ToListAsync(ct);
+        var changed = 0;
+
+        foreach (var asset in assets)
+        {
+            var industry = await _prices.GetIndustryAsync(asset.Symbol, ct);
+            if (string.IsNullOrWhiteSpace(industry)) continue;
+            if (asset.Theme == industry) continue;
+            asset.Theme = industry;
+            changed++;
+
+            // Finnhub ücretsiz katman hız limitine (429) takılmamak için sembol başına kısa bekleme.
+            await Task.Delay(250, ct);
+        }
+
+        if (changed > 0) await _db.SaveChangesAsync(ct);
+        return changed;
     }
 
     public async Task<List<SymbolSearchHit>> SearchSymbolsAsync(string query, CancellationToken ct = default) =>

@@ -33,13 +33,30 @@ public class AzureFoundryAnalysisClient : IAiAnalysisClient
         string userPrompt,
         CancellationToken ct = default)
     {
+        // gpt-5 / o1 / o3 / o4 ailesi "reasoning" modelleridir: max_tokens yerine
+        // max_completion_tokens ister ve özel temperature kabul etmez.
+        var isReasoningModel = IsReasoningModel(_opt.Model);
+
         var req = new ChatCompletionsOptions
         {
             Model = _opt.Model,
-            MaxTokens = _opt.MaxOutputTokens,
-            Temperature = 0.3f,
             ResponseFormat = ChatCompletionsResponseFormat.CreateJsonFormat(),
         };
+
+        if (isReasoningModel)
+        {
+            // SDK MaxTokens'ı max_tokens olarak gönderir; reasoning modelleri reddeder.
+            // Doğru parametreyi ham JSON olarak ekliyoruz.
+            req.AdditionalProperties["max_completion_tokens"] =
+                BinaryData.FromObjectAsJson(_opt.MaxOutputTokens);
+            // Temperature set etmiyoruz (yalnızca varsayılanı kabul ederler).
+        }
+        else
+        {
+            req.MaxTokens = _opt.MaxOutputTokens;
+            req.Temperature = 0.3f;
+        }
+
         req.Messages.Add(new ChatRequestSystemMessage(systemPrompt));
         req.Messages.Add(new ChatRequestUserMessage(userPrompt));
 
@@ -59,5 +76,11 @@ public class AzureFoundryAnalysisClient : IAiAnalysisClient
             throw new InvalidOperationException(
                 $"AI servis çağrısı başarısız (HTTP {ex.Status}). Endpoint/key/deployment'ı kontrol et.", ex);
         }
+    }
+
+    private static bool IsReasoningModel(string model)
+    {
+        var m = model.ToLowerInvariant();
+        return m.StartsWith("gpt-5") || m.StartsWith("o1") || m.StartsWith("o3") || m.StartsWith("o4");
     }
 }

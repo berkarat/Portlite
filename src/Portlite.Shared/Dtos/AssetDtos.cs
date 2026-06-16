@@ -8,14 +8,22 @@ public record AssetDto(
     string Name,
     AssetType Type,
     CurrencyCode Currency,
-    OptionDetailDto? OptionDetail);
+    OptionDetailDto? OptionDetail,
+    string? Theme = null);
 
 public record CreateAssetRequest(
     string Symbol,
     string Name,
     AssetType Type,
     CurrencyCode Currency,
-    OptionDetailDto? OptionDetail);
+    OptionDetailDto? OptionDetail,
+    string? Theme = null);
+
+public record UpdateAssetThemeRequest(string? Theme);
+
+public record AutoThemeRequest(List<string>? Symbols, bool Overwrite = false);
+
+public record AutoThemeResult(int Changed);
 
 public record SymbolSearchHitDto(
     string Symbol,

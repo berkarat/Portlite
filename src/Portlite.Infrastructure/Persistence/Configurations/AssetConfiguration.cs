@@ -15,6 +15,7 @@ public class AssetConfiguration : IEntityTypeConfiguration<Asset>
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Type).HasConversion<int>();
         builder.Property(x => x.Currency).HasConversion<int>();
+        builder.Property(x => x.Theme).HasMaxLength(100);
 
         builder.HasIndex(x => x.Symbol).IsUnique();
 

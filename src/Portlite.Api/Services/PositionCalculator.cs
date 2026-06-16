@@ -126,6 +126,7 @@ public class PositionCalculator
             PriceAsOf: null,
             PreviousClose: null,
             DayChange: null,
-            DayChangePercent: null);
+            DayChangePercent: null,
+            Theme: asset.Theme);
     }
 }

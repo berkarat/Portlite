@@ -75,6 +75,7 @@ local.settings.json
 secrets.json
 appsettings.*.local.json
 appsettings.Production.json
+src/Portlite.Web/wwwroot/appsettings.Development.json
 
 # ---- Personal portfolio data ----
 data/

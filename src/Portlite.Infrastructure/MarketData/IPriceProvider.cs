@@ -4,6 +4,7 @@ public interface IPriceProvider
 {
     Task<QuoteResult> GetQuoteAsync(string symbol, CancellationToken ct = default);
     Task<List<SymbolSearchHit>> SearchSymbolsAsync(string query, CancellationToken ct = default);
+    Task<string?> GetIndustryAsync(string symbol, CancellationToken ct = default);
 }
 
 public record QuoteResult(

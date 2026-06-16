@@ -433,8 +433,18 @@ else
                 if (firstNewline > 0 && lastFence > firstNewline)
                     json = json[(firstNewline + 1)..lastFence].Trim();
             }
-            _parsedReport = System.Text.Json.JsonSerializer.Deserialize<ParsedPorttechReport>(
-                json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            var opts = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+            try
+            {
+                _parsedReport = System.Text.Json.JsonSerializer.Deserialize<ParsedPorttechReport>(json, opts);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // AI yanıtı token limitine takılıp yarıda kesilmiş olabilir → JSON'ı onarıp tekrar dene
+                var repaired = RepairTruncatedJson(json);
+                _parsedReport = System.Text.Json.JsonSerializer.Deserialize<ParsedPorttechReport>(repaired, opts);
+                _errorMessage = "Rapor kısmen alındı (yanıt uzunluk sınırına takıldı); bazı bölümler eksik olabilir.";
+            }
         }
         catch (Exception ex)
         {
@@ -442,6 +452,69 @@ else
             _errorMessage = $"Rapor parse hatası: {ex.Message}";
             Console.WriteLine($"ParseReport error: {ex.Message}\nReportJson preview: {_selectedReport.ReportJson?[..Math.Min(200, _selectedReport.ReportJson?.Length ?? 0)]}");
         }
+    }
+
+    /// <summary>
+    /// Yarıda kesilmiş (truncated) JSON'ı kurtarmaya çalışır: açık string'i kapatır,
+    /// eksik/yarım son elemanı atar ve açık kalan tüm dizi/nesneleri kapatır.
+    /// </summary>
+    private static string RepairTruncatedJson(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return "{}";
+
+        var stack = new Stack<char>();
+        bool inString = false;
+        bool escaped = false;
+        int lastSafe = -1; // tamamlanmış bir eleman/çiftin bittiği son güvenli konum
+
+        for (int i = 0; i < json.Length; i++)
+        {
+            var c = json[i];
+
+            if (inString)
+            {
+                if (escaped) { escaped = false; }
+                else if (c == '\\') { escaped = true; }
+                else if (c == '"') { inString = false; }
+                continue;
+            }
+
+            switch (c)
+            {
+                case '"': inString = true; break;
+                case '{': stack.Push('}'); break;
+                case '[': stack.Push(']'); break;
+                case '}':
+                case ']':
+                    if (stack.Count > 0) stack.Pop();
+                    lastSafe = i;
+                    break;
+                case ',':
+                    lastSafe = i - 1; // virgülden önceki son tam eleman güvenli
+                    break;
+            }
+        }
+
+        // Kesik bir string'in ortasındaysak, son tamamlanmış elemana geri sar
+        var sb = new System.Text.StringBuilder();
+        string body = (inString && lastSafe >= 0) ? json[..(lastSafe + 1)] : json.TrimEnd();
+
+        // Sondaki yarım virgül/ayraçları temizle
+        body = body.TrimEnd();
+        while (body.Length > 0 && (body[^1] == ',' || body[^1] == ':'))
+            body = body[..^1].TrimEnd();
+
+        sb.Append(body);
+
+        // Açık string varsa ve geri sarmadıysak kapat
+        if (inString && !(lastSafe >= 0))
+            sb.Append('"');
+
+        // Açık kalan dizileri/nesneleri kapat
+        while (stack.Count > 0)
+            sb.Append(stack.Pop());
+
+        return sb.ToString();
     }
 
     private static string SeverityLabel(string s) => s switch

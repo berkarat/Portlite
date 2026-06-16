@@ -39,6 +39,17 @@ public class AssetsController : ControllerBase
         return CreatedAtAction(nameof(Get), new { symbol = dto.Symbol }, dto);
     }
 
+    [HttpPut("{symbol}/theme")]
+    public Task<AssetDto> UpdateTheme(string symbol, [FromBody] UpdateAssetThemeRequest req, CancellationToken ct) =>
+        _service.UpdateThemeAsync(symbol, req.Theme, ct);
+
+    [HttpPost("themes/auto")]
+    public async Task<AutoThemeResult> AutoAssignThemes([FromBody] AutoThemeRequest? req, CancellationToken ct)
+    {
+        var changed = await _service.AutoAssignThemesAsync(req?.Symbols, req?.Overwrite ?? false, ct);
+        return new AutoThemeResult(changed);
+    }
+
     [HttpGet("{symbol}/history")]
     public async Task<List<PricePointDto>> History(
         string symbol,

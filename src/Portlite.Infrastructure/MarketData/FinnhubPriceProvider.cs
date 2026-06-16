@@ -58,6 +58,22 @@ public class FinnhubPriceProvider : IPriceProvider, INewsProvider
             .ToList();
     }
 
+    public async Task<string?> GetIndustryAsync(string symbol, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(symbol)) return null;
+
+        var url = $"stock/profile2?symbol={Uri.EscapeDataString(symbol)}&token={_options.ApiKey}";
+        try
+        {
+            var raw = await _http.GetFromJsonAsync<FinnhubProfileResponse>(url, ct);
+            return string.IsNullOrWhiteSpace(raw?.FinnhubIndustry) ? null : raw!.FinnhubIndustry;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<List<NewsItem>> GetCompanyNewsAsync(string symbol, int days, CancellationToken ct = default)
     {
         var to = DateTime.UtcNow.Date;
@@ -114,4 +130,9 @@ public class FinnhubPriceProvider : IPriceProvider, INewsProvider
         [property: JsonPropertyName("o")] decimal? Open,
         [property: JsonPropertyName("pc")] decimal PreviousClose,
         [property: JsonPropertyName("t")] long Timestamp);
+
+    private record FinnhubProfileResponse(
+        [property: JsonPropertyName("finnhubIndustry")] string? FinnhubIndustry,
+        [property: JsonPropertyName("name")] string? Name,
+        [property: JsonPropertyName("ticker")] string? Ticker);
 }
