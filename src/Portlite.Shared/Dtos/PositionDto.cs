@@ -23,3 +23,5 @@ public record PositionDto(
     decimal? DayChange,
     decimal? DayChangePercent,
     string? Theme = null);
+
+public record SetCostBasisRequest(decimal AverageCost);

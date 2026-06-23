@@ -1105,30 +1105,208 @@ table.dt td .badge--option {
 /* Üçlü üst satır: Yükselenler · Tema Dağılımı · Performans */
 .dash-trio {
     display: grid;
-    grid-template-columns: 0.78fr 1.15fr 1.9fr;
+    grid-template-columns: 0.95fr 1.25fr 1.6fr;
     gap: 16px;
     margin-bottom: 24px;
-    align-items: start;
+    align-items: stretch;
 }
 .dash-trio > .panel { margin-bottom: 0; }
 
-/* Tema panel dar kolonda: donut üstte, liste altta */
+/* Tema panel dar kolonda: donut üstte (ortalı), liste altta */
 .tema-dist--stack .tema-dist__grid {
     grid-template-columns: 1fr;
-    gap: 14px;
+    gap: 12px;
 }
 .tema-dist--stack .tema-dist__chart {
-    width: 180px;
-    height: 180px;
+    width: 176px;
+    height: 176px;
+    margin: 0 auto; /* ortala, sağ margin yok */
+    justify-self: center;
 }
 .tema-dist--stack .tema-donut {
-    width: 180px;
-    height: 180px;
+    width: 176px;
+    height: 176px;
+}
+.tema-dist--stack .tema-dist__center-value {
+    font-size: 15px; /* TOPLAM tutarı delik içine sığsın */
+}
+.tema-dist--stack .tema-dist__list {
+    max-height: 190px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.tema-dist--stack .tema-dist__list::-webkit-scrollbar { width: 6px; }
+.tema-dist--stack .tema-dist__list::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
 }
 
 @media (max-width: 1100px) {
     .dash-trio { grid-template-columns: 1fr; }
     .tema-dist--stack .tema-dist__grid { grid-template-columns: minmax(220px, 0.9fr) 1.1fr; }
+}
+
+/* ============================================================
+   Top Gainers / Top Losers (sparkline'lı deneme tasarım)
+   ============================================================ */
+.movers2 {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.movers2__card {
+    padding: 13px 16px;
+    margin-bottom: 0;
+}
+.movers2__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+.movers2__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+.movers2__count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 9px;
+}
+.movers2__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 188px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.movers2__rows::-webkit-scrollbar { width: 6px; }
+.movers2__rows::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
+}
+.movers2__row {
+    display: grid;
+    grid-template-columns: 1fr 64px auto;
+    align-items: center;
+    gap: 14px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-subtle);
+    transition: background 0.15s ease;
+}
+.movers2__row:hover { background: var(--bg-hover); }
+.movers2__sym {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+.movers2__spark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 20px;
+}
+.movers2__spark svg { display: block; }
+.movers2__sparkline {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.movers2__sparkline--gain { stroke: var(--gain); }
+.movers2__sparkline--loss { stroke: var(--loss); }
+.movers2__pct {
+    font-weight: 600;
+    font-size: 13px;
+    text-align: right;
+    min-width: 62px;
+}
+.movers2__pct--gain { color: var(--gain); }
+.movers2__pct--loss { color: var(--loss); }
+.movers2__empty {
+    color: var(--text-tertiary);
+    font-size: 12px;
+    text-align: center;
+    padding: 18px 0;
+}
+@media (max-width: 900px) {
+    .movers2 { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   Son İşlemler (kompakt zaman çizelgesi)
+   ============================================================ */
+.recent {
+    padding: 13px 16px;
+}
+.recent__list {
+    margin-top: 8px;
+    max-height: 296px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.recent__list::-webkit-scrollbar { width: 6px; }
+.recent__list::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
+}
+.recent__item {
+    position: relative;
+    padding: 6px 0 6px 18px;
+    border-left: 1px solid var(--border);
+}
+.recent__item::before {
+    content: "";
+    position: absolute;
+    left: -5px;
+    top: 13px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-surface);
+}
+.recent__item--buy::before { background: var(--gain); }
+.recent__item--sell::before { background: var(--loss); }
+.recent__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.recent__side {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+.recent__date {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+.recent__detail {
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.recent__sym {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.recent__meta {
+    font-size: 12px;
+    color: var(--text-tertiary);
 }
 
 /* ============================================================

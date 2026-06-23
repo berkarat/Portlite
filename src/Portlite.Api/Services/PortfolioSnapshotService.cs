@@ -187,21 +187,26 @@ public class PortfolioSnapshotService
         var rows = await query.OrderBy(s => s.Date).ToListAsync(ct);
 
         var reportingCurrency = CurrencyCode.USD;
-        var cashBalance = await CalculateCashBalanceAsync(subPortfolioId, reportingCurrency, ct);
-        // NOTE: cash balance is "as of now" — historical cash reconstruction is left for backfill work.
 
-        return rows.Select(r => new PortfolioSnapshotDto(
-            r.SubPortfolioId,
-            r.Date,
-            r.MarketValue.ToDto(),
-            r.CostBasis.ToDto(),
-            r.RealizedPnL.ToDto(),
-            r.UnrealizedPnL.ToDto(),
-            cashBalance.ToDto(),
-            new Money(r.MarketValue.Amount + cashBalance.Amount, reportingCurrency).ToDto(),
-            PositionCount: 0,
-            MissingPriceSymbols: new List<string>()
-        )).ToList();
+        // Her snapshot için nakit, O TARİHE kadarki işlemlerden hesaplanır (tarihe duyarlı).
+        var result = new List<PortfolioSnapshotDto>();
+        foreach (var r in rows)
+        {
+            var cash = await CalculateCashBalanceAsync(subPortfolioId, reportingCurrency, ct, asOf: r.Date);
+            result.Add(new PortfolioSnapshotDto(
+                r.SubPortfolioId,
+                r.Date,
+                r.MarketValue.ToDto(),
+                r.CostBasis.ToDto(),
+                r.RealizedPnL.ToDto(),
+                r.UnrealizedPnL.ToDto(),
+                cash.ToDto(),
+                new Money(r.MarketValue.Amount + cash.Amount, reportingCurrency).ToDto(),
+                PositionCount: 0,
+                MissingPriceSymbols: new List<string>()
+            ));
+        }
+        return result;
     }
 
     private async Task<QuoteResult?> FetchQuoteSafelyAsync(string symbol, CancellationToken ct)
@@ -234,11 +239,15 @@ public class PortfolioSnapshotService
     public async Task<Money> CalculateCashBalanceAsync(
         Guid subPortfolioId,
         CurrencyCode reportingCurrency,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        DateOnly? asOf = null)
     {
-        var txs = await _db.CashTransactions
-            .Where(c => c.SubPortfolioId == subPortfolioId)
-            .ToListAsync(ct);
+        // asOf verilirse yalnızca o tarihe (gün sonu) kadarki hareketler/işlemler sayılır.
+        DateTime? cutoff = asOf?.ToDateTime(TimeOnly.MaxValue);
+
+        var txQuery = _db.CashTransactions.Where(c => c.SubPortfolioId == subPortfolioId);
+        if (cutoff.HasValue) txQuery = txQuery.Where(c => c.OccurredAt <= cutoff.Value);
+        var txs = await txQuery.ToListAsync(ct);
 
         decimal balance = 0m;
         foreach (var t in txs)
@@ -253,10 +262,10 @@ public class PortfolioSnapshotService
             };
         }
 
-        // Subtract cost of currently-held positions (cash used to buy), add proceeds of sells
-        var trades = await _db.Trades
-            .Where(t => t.SubPortfolioId == subPortfolioId)
-            .ToListAsync(ct);
+        // Subtract cost of buys, add proceeds of sells (tarihe duyarlı).
+        var tradeQuery = _db.Trades.Where(t => t.SubPortfolioId == subPortfolioId);
+        if (cutoff.HasValue) tradeQuery = tradeQuery.Where(t => t.ExecutedAt <= cutoff.Value);
+        var trades = await tradeQuery.ToListAsync(ct);
 
         foreach (var t in trades)
         {

@@ -17,6 +17,7 @@ public class PortliteDbContext : DbContext
     public DbSet<WatchlistItem> WatchlistItems => Set<WatchlistItem>();
     public DbSet<PortfolioAnalysis> PortfolioAnalyses => Set<PortfolioAnalysis>();
     public DbSet<PorttechReport> PorttechReports => Set<PorttechReport>();
+    public DbSet<PositionCostOverride> PositionCostOverrides => Set<PositionCostOverride>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -65,4 +65,52 @@ public class AssetsController : ControllerBase
             ct);
         return rows;
     }
+
+    // Birden çok sembol için son birkaç günün kapanış serisi (mini sparkline grafikleri).
+    // Gerçek geçmiş fiyatları FMP/Yahoo sağlayıcısından çeker.
+    [HttpGet("sparklines")]
+    public async Task<List<SparklineDto>> Sparklines(
+        [FromQuery] string symbols,
+        [FromServices] Portlite.Infrastructure.MarketData.IHistoricalPriceProvider history,
+        [FromQuery] int days = 14,
+        CancellationToken ct = default)
+    {
+        var syms = (symbols ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => s.ToUpperInvariant())
+            .Distinct()
+            .Take(50)
+            .ToList();
+
+        var window = Math.Clamp(days, 2, 60);
+
+        // En fazla 5 eşzamanlı dış istek (hız + rate-limit dengesi).
+        using var gate = new SemaphoreSlim(5);
+        var tasks = syms.Select(async sym =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                // 40 bar iste: sağlayıcının iç eşiklerini (>=15) aşıp kısa pencereyi güvenle keselim.
+                var bars = await history.GetDailyBarsAsync(sym, 40, ct);
+                var closes = bars
+                    .OrderBy(b => b.Date)
+                    .TakeLast(window)
+                    .Select(b => b.Close)
+                    .ToList();
+                return new SparklineDto(sym, closes);
+            }
+            catch
+            {
+                return new SparklineDto(sym, new List<decimal>());
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+
+        var results = await Task.WhenAll(tasks);
+        return results.ToList();
+    }
 }

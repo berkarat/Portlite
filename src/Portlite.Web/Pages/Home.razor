@@ -103,7 +103,7 @@ else
             <div class="hero-card__big num">@Mask("$" + _kpi.TotalEquity.Amount.ToString("N0"))</div>
             <div style="margin-top:12px; display:inline-flex; align-items:center; gap:12px; padding:8px 14px; border-radius:var(--radius-sm); border:1px solid @(IntradayChange >= 0 ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"); background:@(IntradayChange >= 0 ? "var(--gain-bg)" : "var(--loss-bg)");">
                 <span class="num" style="font-size:14px; font-weight:600; color:@(IntradayChange >= 0 ? "var(--gain)" : "var(--loss)");">
-                    BUGÜN @Mask((IntradayChange >= 0 ? "+" : "") + "$" + Math.Abs(IntradayChange).ToString("N0")) · @Format.SignedPct(IntradayChangePct)
+                    BUGÜN @Mask((IntradayChange >= 0 ? "+" : "−") + "$" + Math.Abs(IntradayChange).ToString("N0")) · @Format.SignedPct(IntradayChangePct)
                 </span>
                 @if (_spyDayPct.HasValue || _qqqDayPct.HasValue)
                 {
@@ -171,56 +171,71 @@ else
     }
     <div class="dash-trio">
 
-        <!-- YÜKSELENLER / DÜŞENLER -->
-        <div class="panel hero-movers">
-            @{ var movers = TopMovers; }
-            @if (movers.gainers.Count == 0 && movers.losers.Count == 0)
-            {
-                <div class="empty" style="padding:30px 0;font-size:12px;">Hareket yok</div>
-            }
-            else
-            {
-                <div class="hero-movers__stack">
-                    <div>
-                        <div class="eyebrow">Yükselenler · @movers.gainers.Count</div>
-                        <div class="hero-movers__list">
-                            @if (movers.gainers.Count == 0)
-                            {
-                                <div class="hero-mover hero-mover--empty">—</div>
-                            }
-                            else
-                            {
-                                @foreach (var p in movers.gainers)
-                                {
-                                    <div class="hero-mover hero-mover--gain">
-                                        <span class="hero-mover__sym">@p.AssetSymbol</span>
-                                        <span class="hero-mover__chg num">@Format.SignedPct(p.DayChangePercent)</span>
-                                    </div>
-                                }
-                            }
-                        </div>
-                    </div>
-                    <div>
-                        <div class="eyebrow">Düşenler · @movers.losers.Count</div>
-                        <div class="hero-movers__list">
-                            @if (movers.losers.Count == 0)
-                            {
-                                <div class="hero-mover hero-mover--empty">—</div>
-                            }
-                            else
-                            {
-                                @foreach (var p in movers.losers)
-                                {
-                                    <div class="hero-mover hero-mover--loss">
-                                        <span class="hero-mover__sym">@p.AssetSymbol</span>
-                                        <span class="hero-mover__chg num">@Format.SignedPct(p.DayChangePercent)</span>
-                                    </div>
-                                }
-                            }
-                        </div>
-                    </div>
+        <!-- YÜKSELEN / DÜŞEN (sparkline'lı) -->
+        @{ var m2 = TopMovers; }
+        <div class="movers2">
+            <div class="panel movers2__card">
+                <div class="movers2__head">
+                    <h3 class="movers2__title">Yükselen</h3>
+                    <span class="movers2__count">@m2.gainers.Count</span>
                 </div>
-            }
+                <div class="movers2__rows">
+                    @if (m2.gainers.Count == 0)
+                    {
+                        <div class="movers2__empty">Yükselen yok</div>
+                    }
+                    else
+                    {
+                        @foreach (var p in m2.gainers)
+                        {
+                            var gpath = BuildSparklinePath(p.AssetSymbol);
+                            <div class="movers2__row">
+                                <span class="movers2__sym">@p.AssetSymbol</span>
+                                <span class="movers2__spark">
+                                    @if (gpath is not null)
+                                    {
+                                        <svg viewBox="0 0 64 20" width="64" height="20" preserveAspectRatio="none">
+                                            <path class="movers2__sparkline movers2__sparkline--gain" d="@gpath" />
+                                        </svg>
+                                    }
+                                </span>
+                                <span class="movers2__pct movers2__pct--gain num">@Format.SignedPct(p.DayChangePercent)</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+            <div class="panel movers2__card">
+                <div class="movers2__head">
+                    <h3 class="movers2__title">Düşen</h3>
+                    <span class="movers2__count">@m2.losers.Count</span>
+                </div>
+                <div class="movers2__rows">
+                    @if (m2.losers.Count == 0)
+                    {
+                        <div class="movers2__empty">Düşen yok</div>
+                    }
+                    else
+                    {
+                        @foreach (var p in m2.losers)
+                        {
+                            var lpath = BuildSparklinePath(p.AssetSymbol);
+                            <div class="movers2__row">
+                                <span class="movers2__sym">@p.AssetSymbol</span>
+                                <span class="movers2__spark">
+                                    @if (lpath is not null)
+                                    {
+                                        <svg viewBox="0 0 64 20" width="64" height="20" preserveAspectRatio="none">
+                                            <path class="movers2__sparkline movers2__sparkline--loss" d="@lpath" />
+                                        </svg>
+                                    }
+                                </span>
+                                <span class="movers2__pct movers2__pct--loss num">@Format.SignedPct(p.DayChangePercent)</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
         </div>
 
         <!-- TEMA DAĞILIMI -->
@@ -269,8 +284,43 @@ else
             </div>
         }
 
-        <!-- TOPLAM PORTFÖY PERFORMANSI -->
-        <div class="hero-chart-card panel">
+        <!-- SON İŞLEMLER (kompakt) -->
+        <div class="panel recent">
+            <div class="panel__head">
+                <div>
+                    <div class="section-title">Son İşlemler</div>
+                    <div class="eyebrow">@(_trades?.Count ?? 0) işlem</div>
+                </div>
+                <a href="trades" class="btn btn--ghost btn--sm">Hepsi →</a>
+            </div>
+            @if (_trades is null || _trades.Count == 0)
+            {
+                <div class="empty" style="padding:24px 0;">Henüz işlem yok.</div>
+            }
+            else
+            {
+                <div class="recent__list">
+                    @foreach (var t in _trades.Take(10))
+                    {
+                        var buy = t.Side == TradeSide.Buy;
+                        <div class="recent__item @(buy ? "recent__item--buy" : "recent__item--sell")">
+                            <div class="recent__row">
+                                <span class="recent__side">@(buy ? "Alış" : "Satış")</span>
+                                <span class="recent__date">@Format.ShortDate(t.ExecutedAt)</span>
+                            </div>
+                            <div class="recent__detail">
+                                <span class="recent__sym">@t.AssetSymbol</span>
+                                <span class="recent__meta num">$@t.Price.ToString("N2") · @Format.Qty(t.Quantity) adet</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- TOPLAM PORTFÖY PERFORMANSI (tam genişlik) -->
+    <div class="hero-chart-card panel" style="margin-top:24px;">
             <div class="perf-head">
                 <div>
                     <div class="section-title">Toplam Portföy Performansı</div>
@@ -345,7 +395,6 @@ else
                 </RadzenChart>
             }
         </div>
-    </div>
 
     <div class="panel" style="margin-top:24px;">
         <div class="panel__head">
@@ -446,50 +495,6 @@ else
                                 }
                                 else { @("—") }
                             </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        }
-    </div>
-
-    <div class="panel" style="margin-top:24px;">
-        <div class="panel__head">
-            <div>
-                <div class="section-title">Son İşlemler</div>
-                <div class="eyebrow">@(_trades?.Count ?? 0) trade · son 8 görüntülenir</div>
-            </div>
-            <a href="trades" class="btn btn--ghost">Hepsi →</a>
-        </div>
-        @if (_trades is null || _trades.Count == 0)
-        {
-            <div class="empty">Henüz işlem yok.</div>
-        }
-        else
-        {
-            <table class="dt">
-                <thead>
-                    <tr>
-                        <th>Tarih</th>
-                        <th>Sembol</th>
-                        <th>Yön</th>
-                        <th class="right">Adet</th>
-                        <th class="right">Birim Fiyat</th>
-                        <th class="right">Toplam</th>
-                        <th>Not</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var t in _trades.Take(8))
-                    {
-                        <tr>
-                            <td class="num">@Format.ShortDate(t.ExecutedAt)</td>
-                            <td><span class="ticker">@t.AssetSymbol</span></td>
-                            <td><span class="badge @(t.Side == TradeSide.Buy ? "badge--buy" : "badge--sell")">@t.Side</span></td>
-                            <td class="right num">@Format.Qty(t.Quantity)</td>
-                            <td class="right num">$@t.Price.ToString("N2")</td>
-                            <td class="right num">$@((t.Quantity * t.Price + t.Fee).ToString("N2"))</td>
-                            <td class="trade-note">@(string.IsNullOrEmpty(t.Notes) ? "—" : t.Notes)</td>
                         </tr>
                     }
                 </tbody>
@@ -752,6 +757,10 @@ else
     // Benchmark return percentages
     private List<PricePointDto> _spyHistory = new();
     private List<PricePointDto> _qqqHistory = new();
+    // Top Gainers/Losers sparkline kapanış serileri (sembol -> son ~14 günün kapanışı)
+    private Dictionary<string, List<decimal>> _sparklines = new(StringComparer.OrdinalIgnoreCase);
+    // Dış para akışları (+Deposit, −Withdraw) tarih bazlı — katkı-arındırılmış getiri için.
+    private List<(DateOnly Date, decimal Amount)> _externalFlows = new();
     private decimal? _spyDayPct;
     private decimal? _qqqDayPct;
     private decimal? _spyWeekPct;
@@ -769,60 +778,46 @@ else
     private decimal? AlphaYtd => _kpi?.YtdChangePercent is not null && _spyYtdPct.HasValue ? _kpi.YtdChangePercent - _spyYtdPct : null;
     private decimal? AlphaAllTime => _kpi?.AllTimePnLPercent is not null && _spyAllTimePct.HasValue ? _kpi.AllTimePnLPercent - _spyAllTimePct : null;
 
-    // Portfolio period returns
-    private decimal? WeekReturnPct
+    // Portfolio period returns (katkı-arındırılmış)
+    private DateOnly TodayDate => DateOnly.FromDateTime(DateTime.UtcNow);
+    private DateOnly MonthStart => new DateOnly(TodayDate.Year, TodayDate.Month, 1);
+
+    // Dönem içindeki net dış para akışı (+Deposit, −Withdraw). Temettü/Faiz GETİRİdir → dışlanmaz.
+    private decimal NetExternalFlow(DateOnly afterExclusive, DateOnly throughInclusive) =>
+        _externalFlows.Where(f => f.Date > afterExclusive && f.Date <= throughInclusive).Sum(f => f.Amount);
+
+    // Katkı-arındırılmış dönemsel getiri:
+    // (şu anki özkaynak − dönem başı özkaynak − dönemdeki net para yatırma) / dönem başı özkaynak.
+    // Para yatırma nakdi/özkaynağı artırır ama KÂR olarak sayılmaz.
+    private (decimal amount, decimal? pct)? AdjustedReturn(DateOnly periodStart)
     {
-        get
-        {
-            if (_snapshots.Count < 2) return null;
-            var latest = _snapshots[^1];
-            var threshold = latest.Date.AddDays(-7);
-            var anchor = _snapshots.FirstOrDefault(s => s.Date >= threshold && s.Date < latest.Date);
-            if (anchor is null) return null;
-            var prev = anchor.TotalEquity.Amount;
-            return prev > 0 ? (latest.TotalEquity.Amount - prev) / prev * 100m : null;
-        }
+        if (_snapshots is null || _snapshots.Count == 0 || _kpi is null) return null;
+        var anchor = _snapshots.LastOrDefault(s => s.Date <= periodStart);
+        if (anchor is null) return null;
+        var startEq = anchor.TotalEquity.Amount;
+        if (startEq <= 0) return null;
+        var endEq = _kpi.TotalEquity.Amount;
+        var flow = NetExternalFlow(anchor.Date, TodayDate);
+        var amount = endEq - startEq - flow;
+        return (amount, amount / startEq * 100m);
     }
 
-    private decimal WeekReturnAmount
-    {
-        get
-        {
-            if (_snapshots.Count < 2) return 0;
-            var latest = _snapshots[^1];
-            var threshold = latest.Date.AddDays(-7);
-            var anchor = _snapshots.FirstOrDefault(s => s.Date >= threshold && s.Date < latest.Date);
-            if (anchor is null) return 0;
-            return latest.TotalEquity.Amount - anchor.TotalEquity.Amount;
-        }
-    }
+    private decimal? WeekReturnPct => AdjustedReturn(TodayDate.AddDays(-7))?.pct;
+    private decimal WeekReturnAmount => AdjustedReturn(TodayDate.AddDays(-7))?.amount ?? 0m;
 
-    private decimal? MtdReturnPct
+    // MTD: dönem başı = ay içindeki İLK snapshot (ay başı veri boşluğundaki sıçramadan kaçın).
+    private (decimal amount, decimal? pct)? MtdReturn()
     {
-        get
-        {
-            if (_snapshots.Count < 2) return null;
-            var latest = _snapshots[^1];
-            var monthStart = new DateOnly(latest.Date.Year, latest.Date.Month, 1);
-            var anchor = _snapshots.FirstOrDefault(s => s.Date >= monthStart && s.Date < latest.Date);
-            if (anchor is null) return null;
-            var prev = anchor.TotalEquity.Amount;
-            return prev > 0 ? (latest.TotalEquity.Amount - prev) / prev * 100m : null;
-        }
+        if (_snapshots is null || _kpi is null) return null;
+        var anchor = _snapshots.FirstOrDefault(s => s.Date >= MonthStart && s.Date < TodayDate);
+        if (anchor is null) return null;
+        var startEq = anchor.TotalEquity.Amount;
+        if (startEq <= 0) return null;
+        var amount = _kpi.TotalEquity.Amount - startEq - NetExternalFlow(anchor.Date, TodayDate);
+        return (amount, amount / startEq * 100m);
     }
-
-    private decimal MtdReturnAmount
-    {
-        get
-        {
-            if (_snapshots.Count < 2) return 0;
-            var latest = _snapshots[^1];
-            var monthStart = new DateOnly(latest.Date.Year, latest.Date.Month, 1);
-            var anchor = _snapshots.FirstOrDefault(s => s.Date >= monthStart && s.Date < latest.Date);
-            if (anchor is null) return 0;
-            return latest.TotalEquity.Amount - anchor.TotalEquity.Amount;
-        }
-    }
+    private decimal? MtdReturnPct => MtdReturn()?.pct;
+    private decimal MtdReturnAmount => MtdReturn()?.amount ?? 0m;
 
     private Dictionary<string, decimal> _prevPrices = new();
     private Dictionary<string, string> _lastDirection = new(); // sym -> "up"/"down" (persists)
@@ -856,13 +851,79 @@ else
         }
     }
 
-    private decimal IntradayChange =>
-        _positions?.Sum(p => p.DayChange ?? 0m) ?? 0m;
+    // Açık pozisyonların + hareket edenlerin kapanış serilerini çekip sparkline ve hafta getirisini üretir.
+    private async Task LoadSparklinesAsync()
+    {
+        try
+        {
+            var movers = TopMovers;
+            var syms = VisiblePositions.Select(p => p.AssetSymbol)
+                .Concat(movers.gainers.Select(p => p.AssetSymbol))
+                .Concat(movers.losers.Select(p => p.AssetSymbol))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (syms.Count == 0) return;
+
+            var data = await Api.GetSparklinesAsync(syms);
+            if (data is null) return;
+
+            foreach (var d in data)
+                _sparklines[d.Symbol] = d.Points ?? new List<decimal>();
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { /* sparkline opsiyonel — sessizce geç */ }
+    }
+
+    // Kapanış serisinden 64x20 viewBox'a göre SVG path ("M.. L..") üretir. <2 nokta ise null.
+    private string? BuildSparklinePath(string symbol)
+    {
+        if (!_sparklines.TryGetValue(symbol, out var pts) || pts.Count < 2)
+            return null;
+
+        const double width = 64, height = 20, pad = 2;
+        double innerW = width - pad * 2;
+        double innerH = height - pad * 2;
+
+        decimal min = pts.Min();
+        decimal max = pts.Max();
+        decimal range = max - min;
+        int n = pts.Count;
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < n; i++)
+        {
+            double x = pad + innerW * i / (n - 1);
+            double y = range == 0
+                ? pad + innerH / 2
+                : pad + innerH * (double)(1 - (pts[i] - min) / range); // yüksek değer → küçük y
+            sb.Append(i == 0 ? 'M' : 'L');
+            sb.Append(x.ToString("0.#", inv));
+            sb.Append(',');
+            sb.Append(y.ToString("0.#", inv));
+            sb.Append(' ');
+        }
+        return sb.ToString().Trim();
+    }
+
+    // BUGÜN = dünden bugüne, katkı-arındırılmış (para yatırma kâr sayılmaz).
+    private decimal IntradayChange
+    {
+        get
+        {
+            var r = AdjustedReturn(TodayDate.AddDays(-1));
+            if (r is not null) return r.Value.amount;
+            return _positions?.Sum(p => p.DayChange ?? 0m) ?? 0m;
+        }
+    }
 
     private decimal? IntradayChangePct
     {
         get
         {
+            var r = AdjustedReturn(TodayDate.AddDays(-1));
+            if (r is not null) return r.Value.pct;
             if (_positions is null) return null;
             var prevTotal = _positions.Sum(p =>
                 p.PreviousClose.HasValue && p.Quantity > 0
@@ -1080,10 +1141,17 @@ else
     private decimal? PortfolioPercent(PositionDto p)
     {
         if (!p.MarketValue.HasValue) return null;
-        var total = AllocationTotal;
+        // Midas gibi: payda yalnızca hisse toplamı (nakit hariç) → yüzdeler %100'e toplanır.
+        var total = PositionsValueTotal;
         if (total <= 0) return null;
         return p.MarketValue.Value / total * 100m;
     }
+
+    // Açık pozisyonların toplam piyasa değeri (nakit hariç).
+    private decimal PositionsValueTotal =>
+        (_positions ?? new List<PositionDto>())
+            .Where(p => p.Quantity > 0 && p.MarketValue.HasValue)
+            .Sum(p => p.MarketValue!.Value);
 
     private static readonly System.Globalization.CultureInfo _trCulture = new("tr-TR");
 
@@ -1296,6 +1364,9 @@ else
         try
         {
             var id = Store.SelectedId.Value;
+            // Önceki portföyün sparkline/akış verisi sızmasın.
+            _sparklines.Clear();
+            _externalFlows.Clear();
             // Render with cached data immediately — fetch all read endpoints in parallel.
             var snapsTask = Api.ListSnapshotsAsync(id);
             var tradesTask = Api.ListTradesAsync(id);
@@ -1303,7 +1374,8 @@ else
             var posTask = Api.ListPositionsAsync(id);
             var spyTask = Api.GetPriceHistoryAsync("SPY");
             var qqqTask = Api.GetPriceHistoryAsync("QQQ");
-            await Task.WhenAll(snapsTask, tradesTask, kpiTask, posTask, spyTask, qqqTask);
+            var cashTask = Api.ListCashAsync(id);
+            await Task.WhenAll(snapsTask, tradesTask, kpiTask, posTask, spyTask, qqqTask, cashTask);
 
             var snaps = snapsTask.Result ?? new List<PortfolioSnapshotDto>();
             var trades = tradesTask.Result ?? new List<TradeDto>();
@@ -1314,12 +1386,19 @@ else
             _snapshot = snaps.LastOrDefault();
             _spyHistory = spyTask.Result ?? new List<PricePointDto>();
             _qqqHistory = qqqTask.Result ?? new List<PricePointDto>();
+            // Dış para akışları: yalnızca Deposit(+)/Withdraw(−); temettü/faiz getiri sayılır.
+            _externalFlows = (cashTask.Result ?? new List<CashTransactionDto>())
+                .Where(c => c.Type == CashTxType.Deposit || c.Type == CashTxType.Withdraw)
+                .Select(c => (Date: DateOnly.FromDateTime(c.OccurredAt),
+                              Amount: c.Type == CashTxType.Deposit ? c.Amount.Amount : -c.Amount.Amount))
+                .ToList();
 
             ApplyOrdering();
             ApplyPriceFlash();
             BuildPerformanceSeries(snaps, _spyHistory);
             ComputeBenchmarkReturns();
             _ = LoadPorttechBadgesAsync(id);
+            _ = LoadSparklinesAsync();
 
             _lastUpdated = DateTime.UtcNow;
 
@@ -1563,7 +1642,9 @@ else
         _perfCurrentEquity = window[^1].TotalEquity.Amount;
         _perfStartDate = baseSnap.Date;
         _perfEndDate = window[^1].Date;
-        _perfChangeAmount = _perfCurrentEquity.Value - baseValue;
+        // Katkı-arındırılmış: dönemdeki net para yatırma/çekmeyi değişimden çıkar.
+        var endFlow = NetExternalFlow(baseSnap.Date, window[^1].Date);
+        _perfChangeAmount = (_perfCurrentEquity.Value - endFlow) - baseValue;
         _perfChangePct = baseValue > 0 ? _perfChangeAmount / baseValue * 100m : null;
 
         if (baseValue > 0)
@@ -1572,7 +1653,8 @@ else
                 .Select(s => new PerfPoint
                 {
                     Date = s.Date.ToDateTime(TimeOnly.MinValue),
-                    Value = (s.TotalEquity.Amount - baseValue) / baseValue * 100m
+                    // Her noktada, dönem başından o güne kadarki net para akışını çıkar.
+                    Value = (s.TotalEquity.Amount - NetExternalFlow(baseSnap.Date, s.Date) - baseValue) / baseValue * 100m
                 })
                 .ToList();
         }
@@ -1795,7 +1877,10 @@ else
     private TradeFormModel _tradeForm = new();
 
     private decimal TradeNotional => _tradeForm.Quantity * _tradeForm.Price;
-    private decimal TradeTotalSigned => TradeNotional + _tradeForm.Fee;
+    // Alış: toplam maliyet = tutar + komisyon. Satış: net gelir = tutar − komisyon.
+    private decimal TradeTotalSigned => _tradeForm.Side == TradeSide.Buy
+        ? TradeNotional + _tradeForm.Fee
+        : TradeNotional - _tradeForm.Fee;
 
     private bool TradeCanSubmit =>
         !string.IsNullOrWhiteSpace(_tradeForm.AssetSymbol)

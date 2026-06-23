@@ -34,3 +34,5 @@ public record SymbolSearchHitDto(
 public record SymbolLookupRequest(string Symbol);
 
 public record PricePointDto(DateOnly Date, decimal Close);
+
+public record SparklineDto(string Symbol, List<decimal> Points);

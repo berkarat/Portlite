@@ -35,11 +35,23 @@ public class PositionCalculator
             .Where(a => symbols.Contains(a.Symbol))
             .ToDictionaryAsync(a => a.Symbol, ct);
 
+        // Elle girilen ortalama maliyet ezmeleri (varsa hesaplanan ortalamanın yerine geçer).
+        var overrides = await _db.PositionCostOverrides
+            .Where(o => o.SubPortfolioId == subPortfolioId)
+            .ToDictionaryAsync(o => o.AssetSymbol, o => o.AverageCost, ct);
+
         var positions = new List<PositionDto>();
         foreach (var group in trades.GroupBy(t => t.AssetSymbol))
         {
             if (!assets.TryGetValue(group.Key, out var asset)) continue;
             var basePos = BuildPosition(subPortfolioId, asset, group.OrderBy(t => t.ExecutedAt).ToList());
+
+            // Override: adet işlemlerden gelmeye devam eder, yalnızca ortalama maliyet & toplam maliyet ezilir.
+            if (basePos.Quantity > 0 && overrides.TryGetValue(group.Key, out var ovAvg) && ovAvg > 0)
+            {
+                basePos = basePos with { AverageCost = ovAvg, TotalCost = ovAvg * basePos.Quantity };
+            }
+
             var enriched = await EnrichWithPriceAsync(basePos, asset, ct);
             positions.Add(enriched);
         }

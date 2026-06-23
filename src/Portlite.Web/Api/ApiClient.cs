@@ -152,6 +152,15 @@ public class ApiClient
     public Task<List<PricePointDto>?> GetPriceHistoryAsync(string symbol) =>
         _http.GetFromJsonAsync<List<PricePointDto>>($"api/assets/{Uri.EscapeDataString(symbol)}/history", JsonOpts);
 
+    public Task<List<SparklineDto>?> GetSparklinesAsync(IEnumerable<string> symbols, int days = 14)
+    {
+        var joined = string.Join(",", symbols);
+        if (string.IsNullOrWhiteSpace(joined))
+            return Task.FromResult<List<SparklineDto>?>(new List<SparklineDto>());
+        return _http.GetFromJsonAsync<List<SparklineDto>>(
+            $"api/assets/sparklines?symbols={Uri.EscapeDataString(joined)}&days={days}", JsonOpts);
+    }
+
     // ---------------- watchlist ----------------
     public Task<List<WatchlistItemDto>?> ListWatchlistAsync() =>
         _http.GetFromJsonAsync<List<WatchlistItemDto>>("api/watchlist", JsonOpts);
