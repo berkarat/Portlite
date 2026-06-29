@@ -83,3 +83,12 @@ data/
 # ---- Local publish artefacts (deploy via CI, not committed) ----
 src/Portlite.Api/publish/
 src/Portlite.Api/app.zip
+
+# ---- Local backups and helper scripts (contain secrets / DB dumps) ----
+backups/
+scripts/
+
+
+# ---- Local backups and helper scripts ----
+backups/
+scripts/
