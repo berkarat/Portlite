@@ -127,10 +127,10 @@ else
         }
     </div>
 
-    <!-- KPI KARTLARI: Hafta, MTD, YTD, All Time -->
+    <!-- KPI KARTLARI: Hafta, MTD, YTD, All Time, Gerçekleşen -->
     @if (_kpi is not null)
     {
-        <div class="kpi-grid" style="margin-bottom:24px;">
+        <div class="kpi-grid kpi-grid--5" style="margin-bottom:24px;">
             <div class="kpi">
                 <div class="kpi__label"><span class="kpi__label-text">SON 7 GÜN</span></div>
                 <div class="kpi__value @Format.DeltaClassPct(WeekReturnPct)">@Format.SignedPct(WeekReturnPct)</div>
@@ -165,6 +165,14 @@ else
                     @((_kpi.AllTimePnL.Amount > 0 ? "+" : "") + "$" + Math.Abs(_kpi.AllTimePnL.Amount).ToString("N0"))
                     @if (_spyAllTimePct.HasValue) { <text> · SPX @Format.SignedPct(_spyAllTimePct)</text> }
                     @if (_qqqAllTimePct.HasValue) { <text> · NDX @Format.SignedPct(_qqqAllTimePct)</text> }
+                </div>
+            </div>
+            <div class="kpi">
+                <div class="kpi__label"><span class="kpi__label-text">GERÇEKLEŞEN KÂR</span></div>
+                <div class="kpi__value @Format.DeltaClass(TotalRealizedPnL)">@Mask((TotalRealizedPnL > 0 ? "+" : "") + "$" + Math.Abs(TotalRealizedPnL).ToString("N0"))</div>
+                <div class="kpi__sub num">
+                    @if (ClosedPositions.Count > 0) { <text>@ClosedPositions.Count kapanan pozisyon</text> }
+                    else { <text>Kapanan pozisyon yok</text> }
                 </div>
             </div>
         </div>
@@ -420,7 +428,8 @@ else
                         <th class="right @SortClass("day")" @onclick='() => ToggleSort("day")'>Bugün @SortArrow("day")</th>
                         <th class="right @SortClass("weight")" @onclick='() => ToggleSort("weight")'>% Portföy @SortArrow("weight")</th>
                         <th class="right @SortClass("value")" @onclick='() => ToggleSort("value")'>Piyasa Değeri @SortArrow("value")</th>
-                        <th class="right @SortClass("pnl")" @onclick='() => ToggleSort("pnl")'>Toplam K/Z @SortArrow("pnl")</th>
+                        <th class="right @SortClass("pnl")" @onclick='() => ToggleSort("pnl")'>Açık K/Z @SortArrow("pnl")</th>
+                        <th class="right @SortClass("realized")" @onclick='() => ToggleSort("realized")'>Gerçekleşen K/Z @SortArrow("realized")</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -495,12 +504,57 @@ else
                                 }
                                 else { @("—") }
                             </td>
+                            <td class="right num @(p.RealizedPnL != 0 ? Format.DeltaClass(p.RealizedPnL) : "tag-flat")">
+                                @if (p.RealizedPnL != 0)
+                                {
+                                    <div>@Mask((p.RealizedPnL > 0 ? "+" : "") + Format.Sign(p.Currency) + Math.Abs(p.RealizedPnL).ToString("N2"))</div>
+                                }
+                                else { @("—") }
+                            </td>
                         </tr>
                     }
                 </tbody>
             </table>
         }
     </div>
+
+    @if (ClosedPositions.Count > 0)
+    {
+        <div class="panel" style="margin-top:24px;">
+            <div class="panel__head">
+                <div>
+                    <div class="section-title">Kapanan Pozisyonlar</div>
+                    <div class="eyebrow">@ClosedPositions.Count sembol · gerçekleşen toplam @Mask((TotalClosedRealizedPnL > 0 ? "+" : "") + "$" + Math.Abs(TotalClosedRealizedPnL).ToString("N2"))</div>
+                </div>
+            </div>
+            <table class="dt">
+                <thead>
+                    <tr>
+                        <th>Sembol</th>
+                        <th class="right">İşlem</th>
+                        <th class="right">Son İşlem</th>
+                        <th class="right">Gerçekleşen K/Z</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in ClosedPositions)
+                    {
+                        <tr>
+                            <td>
+                                <div class="ticker"><span>@p.AssetSymbol</span></div>
+                                <div class="ticker-name">@p.AssetName</div>
+                            </td>
+                            <td class="right num">@p.TradeCount</td>
+                            <td class="right num">@(p.LastTradeAt?.ToLocalTime().ToString("dd.MM.yyyy") ?? "—")</td>
+                            <td class="right num @(p.RealizedPnL != 0 ? Format.DeltaClass(p.RealizedPnL) : "tag-flat")">
+                                @Mask((p.RealizedPnL > 0 ? "+" : "") + Format.Sign(p.Currency) + Math.Abs(p.RealizedPnL).ToString("N2"))
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 }
 
 <AnalysisModal IsOpen="@_aiOpen"
@@ -951,9 +1005,27 @@ else
 
     private decimal AllocationTotal => AllocationData.Sum(s => s.Value);
 
-    // Ana ekranda yalnızca açık (adet > 0) pozisyonları göster; kapanmış olanlar gizli.
+    // Adet bu eşiğin altındaysa pozisyon fiilen kapanmış sayılır (alım/satım float artığı temizlenir).
+    private const decimal OpenQtyEpsilon = 0.0001m;
+
+    // Ana ekranda yalnızca açık (adet > eşik) pozisyonları göster; kapanmış olanlar gizli.
     private List<PositionDto> VisiblePositions =>
-        (_positions ?? new List<PositionDto>()).Where(p => p.Quantity > 0).ToList();
+        (_positions ?? new List<PositionDto>()).Where(p => p.Quantity > OpenQtyEpsilon).ToList();
+
+    // Tamamen kapanmış (adet ≈ 0) ama gerçekleşen K/Z'si olan pozisyonlar.
+    private List<PositionDto> ClosedPositions =>
+        (_positions ?? new List<PositionDto>())
+            .Where(p => p.Quantity <= OpenQtyEpsilon && p.RealizedPnL != 0)
+            .OrderByDescending(p => p.LastTradeAt)
+            .ToList();
+
+    // Tüm pozisyonların (açık + kapanmış) gerçekleşen K/Z toplamı.
+    private decimal TotalRealizedPnL =>
+        (_positions ?? new List<PositionDto>()).Sum(p => p.RealizedPnL);
+
+    // Yalnızca kapanmış pozisyonların gerçekleşen K/Z toplamı.
+    private decimal TotalClosedRealizedPnL =>
+        ClosedPositions.Sum(p => p.RealizedPnL);
 
     // ─── Tema Dağılımı ─────────────────────────────────────────────
     public class ThemeSlice
@@ -1287,6 +1359,7 @@ else
             "value" => p => p.MarketValue ?? 0m,
             "weight" => p => p.MarketValue ?? 0m,
             "pnl" => p => p.UnrealizedPnL ?? 0m,
+            "realized" => p => p.RealizedPnL,
             _ => p => p.AssetSymbol
         };
 

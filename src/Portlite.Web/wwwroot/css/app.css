@@ -408,6 +408,9 @@ table.dt tbody tr:hover td.tag-neg { background: rgba(239,68,68,0.14); }
     margin-bottom: 28px;
     box-shadow: var(--shadow-sm);
 }
+.kpi-grid--5 {
+    grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
+}
 .kpi {
     padding: 22px 24px 20px;
     border-right: 1px solid var(--border);
