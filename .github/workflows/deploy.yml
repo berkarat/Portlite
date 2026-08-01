@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 env:
-  AZURE_WEBAPP_NAME: berk-portfolio
-  AZURE_RESOURCE_GROUP: Berk-SmartLifeManager
+  AZURE_WEBAPP_NAME: portlite-web
+  AZURE_RESOURCE_GROUP: rg-portlite
   DOTNET_VERSION: '8.0.x'
   PUBLISH_DIR: ./publish
 
