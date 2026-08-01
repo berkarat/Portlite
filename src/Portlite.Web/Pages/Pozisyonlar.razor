@@ -1,0 +1,245 @@
+@page "/pozisyonlar"
+@inject ApiClient Api
+@inject PortfolioStore Store
+@implements IDisposable
+
+<PageTitle>Pozisyonlar — Portlite</PageTitle>
+
+<div class="page-title-row">
+    <div class="page-title-row__main">
+        <div class="eyebrow">Defter</div>
+        <h1 class="page-title">Pozisyonlar</h1>
+    </div>
+    <div class="btn-row" style="margin-bottom:0;">
+        @if (_positions is not null && _positions.Any(IsActive))
+        {
+            <a class="btn" href="@BuildDownloadDataUrl()" download="@BuildDownloadFileName()">⬇ .txt indir</a>
+        }
+        <button class="btn" @onclick="ReloadAsync" disabled="@(_loading || Store.SelectedId is null)">
+            @(_loading ? "Yükleniyor…" : "↻ Yenile")
+        </button>
+    </div>
+</div>
+
+<PortfolioChips />
+
+@if (_error is not null) { <div class="alert alert--err">@_error</div> }
+
+@if (Store.Selected is null)
+{
+    <div class="panel"><div class="empty">Bir alt portföy seç.</div></div>
+}
+else if (_positions is null)
+{
+    <div class="panel"><div class="panel__body--padded"><div class="skeleton" style="height:220px;"></div></div></div>
+}
+else
+{
+    var view = Filtered();
+
+    <div class="pos-kpis">
+        <div class="pos-kpi">
+            <div class="pos-kpi__lbl">Aktif Pozisyon</div>
+            <div class="pos-kpi__val num">@view.Count</div>
+        </div>
+        <div class="pos-kpi">
+            <div class="pos-kpi__lbl">Toplam Maliyet</div>
+            <div class="pos-kpi__val num">$@TotalCost(view).ToString("N2")</div>
+        </div>
+        <div class="pos-kpi">
+            <div class="pos-kpi__lbl">Piyasa Değeri</div>
+            <div class="pos-kpi__val num">$@TotalMarket(view).ToString("N2")</div>
+        </div>
+        <div class="pos-kpi">
+            <div class="pos-kpi__lbl">Unrealized PnL</div>
+            <div class="pos-kpi__val num @Format.DeltaClass(TotalPnL(view))">
+                @Format.Signed(TotalPnL(view), Portlite.Domain.Enums.CurrencyCode.USD)
+                <span class="pos-kpi__sub">(@Format.SignedPct(TotalPnLPct(view)))</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        @if (view.Count == 0)
+        {
+            <div class="empty">Bu filtreye uyan pozisyon yok.</div>
+        }
+        else
+        {
+            <table class="dt pos-table">
+                <thead>
+                    <tr>
+                        <th class="pos-th" @onclick="@(() => SortBy(SortKey.Symbol))">Sembol @Arrow(SortKey.Symbol)</th>
+                        <th>Ad</th>
+                        <th class="right pos-th" @onclick="@(() => SortBy(SortKey.Quantity))">Adet @Arrow(SortKey.Quantity)</th>
+                        <th class="right pos-th" @onclick="@(() => SortBy(SortKey.AvgCost))">Ort. Maliyet @Arrow(SortKey.AvgCost)</th>
+                        <th class="right pos-th" @onclick="@(() => SortBy(SortKey.TotalCost))">Toplam Maliyet @Arrow(SortKey.TotalCost)</th>
+                        <th class="right pos-th" @onclick="@(() => SortBy(SortKey.Price))">Piyasa @Arrow(SortKey.Price)</th>
+                        <th class="right pos-th" @onclick="@(() => SortBy(SortKey.MarketValue))">Piyasa Değeri @Arrow(SortKey.MarketValue)</th>
+                        <th class="right pos-th" @onclick="@(() => SortBy(SortKey.UnrealizedPnL))">Unrl. $ @Arrow(SortKey.UnrealizedPnL)</th>
+                        <th class="right pos-th" @onclick="@(() => SortBy(SortKey.UnrealizedPct))">Unrl. % @Arrow(SortKey.UnrealizedPct)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Sorted(view))
+                    {
+                        var closed = p.Quantity <= 0;
+                        var pct = UnrealizedPct(p);
+                        <tr class="@(closed ? "pos-row--closed" : "")">
+                            <td><span class="ticker">@p.AssetSymbol</span></td>
+                            <td class="pos-name" title="@p.AssetName">@(p.AssetName ?? "—")</td>
+                            <td class="right num">@Format.Qty(p.Quantity)</td>
+                            <td class="right num">@(closed ? "—" : $"${p.AverageCost.ToString("N2")}")</td>
+                            <td class="right num">@(closed ? "—" : $"${p.TotalCost.ToString("N2")}")</td>
+                            <td class="right num">@(p.CurrentPrice.HasValue ? $"${p.CurrentPrice.Value.ToString("N2")}" : "—")</td>
+                            <td class="right num">@(p.MarketValue.HasValue ? $"${p.MarketValue.Value.ToString("N2")}" : "—")</td>
+                            <td class="right num @(p.UnrealizedPnL.HasValue ? Format.DeltaClass(p.UnrealizedPnL.Value) : "")">
+                                @(p.UnrealizedPnL.HasValue ? Format.Signed(p.UnrealizedPnL.Value, p.Currency) : "—")
+                            </td>
+                            <td class="right num @Format.DeltaClassPct(pct)">
+                                @Format.SignedPct(pct)
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    private List<PositionDto>? _positions;
+    private bool _loading;
+    private string? _error;
+    private Guid? _lastLoadedFor;
+
+    private enum SortKey { Symbol, Quantity, AvgCost, TotalCost, Price, MarketValue, UnrealizedPnL, UnrealizedPct }
+    private SortKey _sort = SortKey.Symbol;
+    private bool _sortDesc;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Changed += OnStoreChanged;
+        await LoadIfNeededAsync();
+    }
+
+    private async void OnStoreChanged()
+    {
+        await LoadIfNeededAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadIfNeededAsync()
+    {
+        var id = Store.SelectedId;
+        if (id is null) { _positions = new(); _lastLoadedFor = null; return; }
+        if (_lastLoadedFor == id && _positions is not null) return;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        var id = Store.SelectedId;
+        if (id is null) return;
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            _positions = await Api.ListPositionsAsync(id.Value) ?? new();
+            _lastLoadedFor = id;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private List<PositionDto> Filtered()
+    {
+        if (_positions is null) return new();
+        return _positions.Where(IsActive).ToList();
+    }
+
+    private static bool IsActive(PositionDto p) => Math.Round(p.Quantity, 4, MidpointRounding.AwayFromZero) > 0m;
+
+    private string BuildDownloadText()
+    {
+        if (_positions is null) return string.Empty;
+        var sb = new System.Text.StringBuilder();
+        foreach (var p in _positions.Where(IsActive).OrderBy(p => p.AssetSymbol, StringComparer.OrdinalIgnoreCase))
+        {
+            sb.Append(p.AssetSymbol).Append(' ')
+              .Append(Format.Qty(p.Quantity)).Append(" adet ")
+              .Append(p.AverageCost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)).Append(" maliyet")
+              .Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    private string BuildDownloadDataUrl()
+    {
+        var text = BuildDownloadText();
+        var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(text));
+        return $"data:text/plain;charset=utf-8;base64,{base64}";
+    }
+
+    private string BuildDownloadFileName()
+    {
+        var name = Store.Selected?.Name ?? "portfoy";
+        var safe = new string(name.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
+        if (string.IsNullOrEmpty(safe)) safe = "portfoy";
+        return $"pozisyonlar-{safe}-{DateTime.Now:yyyyMMdd}.txt";
+    }
+
+    private IEnumerable<PositionDto> Sorted(List<PositionDto> src)
+    {
+        IOrderedEnumerable<PositionDto> q = _sort switch
+        {
+            SortKey.Quantity      => src.OrderBy(p => p.Quantity),
+            SortKey.AvgCost       => src.OrderBy(p => p.AverageCost),
+            SortKey.TotalCost     => src.OrderBy(p => p.TotalCost),
+            SortKey.Price         => src.OrderBy(p => p.CurrentPrice ?? decimal.MinValue),
+            SortKey.MarketValue   => src.OrderBy(p => p.MarketValue ?? decimal.MinValue),
+            SortKey.UnrealizedPnL => src.OrderBy(p => p.UnrealizedPnL ?? decimal.MinValue),
+            SortKey.UnrealizedPct => src.OrderBy(p => UnrealizedPct(p) ?? decimal.MinValue),
+            _                     => src.OrderBy(p => p.AssetSymbol, StringComparer.OrdinalIgnoreCase),
+        };
+        return _sortDesc ? q.Reverse() : q;
+    }
+
+    private void SortBy(SortKey key)
+    {
+        if (_sort == key) _sortDesc = !_sortDesc;
+        else { _sort = key; _sortDesc = key != SortKey.Symbol; }
+    }
+
+    private string Arrow(SortKey key) =>
+        _sort == key ? (_sortDesc ? " ▾" : " ▴") : "";
+
+    private static decimal? UnrealizedPct(PositionDto p)
+    {
+        if (!p.UnrealizedPnL.HasValue || p.TotalCost == 0) return null;
+        return p.UnrealizedPnL.Value / p.TotalCost * 100m;
+    }
+
+    private static decimal TotalCost(IEnumerable<PositionDto> src) => src.Where(p => p.Quantity > 0).Sum(p => p.TotalCost);
+    private static decimal TotalMarket(IEnumerable<PositionDto> src) => src.Sum(p => p.MarketValue ?? 0m);
+    private static decimal TotalPnL(IEnumerable<PositionDto> src) => src.Sum(p => p.UnrealizedPnL ?? 0m);
+    private static decimal? TotalPnLPct(IEnumerable<PositionDto> src)
+    {
+        var cost = TotalCost(src);
+        if (cost == 0) return null;
+        return TotalPnL(src) / cost * 100m;
+    }
+
+    public void Dispose()
+    {
+        Store.Changed -= OnStoreChanged;
+    }
+}
