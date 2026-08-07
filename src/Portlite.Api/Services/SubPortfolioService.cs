@@ -87,6 +87,9 @@ public class SubPortfolioService
             _db.CashTransactions.RemoveRange(sp.CashTransactions);
             _db.PortfolioValueSnapshots.RemoveRange(sp.ValueSnapshots);
         }
+        await _db.PortfolioAnalyses.Where(x => x.SubPortfolioId == id).ExecuteDeleteAsync(ct);
+        await _db.PorttechReports.Where(x => x.SubPortfolioId == id).ExecuteDeleteAsync(ct);
+        await _db.PositionCostOverrides.Where(x => x.SubPortfolioId == id).ExecuteDeleteAsync(ct);
         _db.SubPortfolios.Remove(sp);
         await _db.SaveChangesAsync(ct);
     }

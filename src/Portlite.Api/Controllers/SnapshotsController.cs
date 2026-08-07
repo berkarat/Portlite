@@ -21,6 +21,14 @@ public class SnapshotsController : ControllerBase
     public Task<PortfolioSnapshotDto> Create(Guid portfolioId, CancellationToken ct) =>
         _service.CreateOrUpdateSnapshotAsync(portfolioId, ct);
 
+    [HttpPost("api/portfolios/{portfolioId:guid}/snapshots/backfill")]
+    public Task<SnapshotBackfillResult> Backfill(
+        Guid portfolioId,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct) =>
+        _service.BackfillAsync(portfolioId, from, to, ct);
+
     [HttpGet("api/portfolios/{portfolioId:guid}/snapshots")]
     public Task<List<PortfolioSnapshotDto>> List(
         Guid portfolioId,

@@ -56,29 +56,32 @@ public class KpiService
             ? allTimePnLAmount / netCash.Amount * 100m
             : null;
 
-        // Last day change = latest equity - previous-snapshot equity
+        // Last day change = latest equity - previous-snapshot equity (tarihe duyarlı nakit + akış arındırma)
         var prevDay = snapshots.LastOrDefault(s => s.Date < latest.Date);
         var lastDayChange = decimal.Zero;
         decimal? lastDayPct = null;
         if (prevDay is not null)
         {
-            var prevEquity = prevDay.MarketValue.Amount + cashBalance.Amount;
-            var currEquity = latest.MarketValue.Amount + cashBalance.Amount;
-            lastDayChange = currEquity - prevEquity;
+            var prevCash = await _snapshots.CalculateCashBalanceAsync(subPortfolioId, reportingCurrency, ct, asOf: prevDay.Date);
+            var prevEquity = prevDay.MarketValue.Amount + prevCash.Amount;
+            var dayFlow = await NetFlowBetweenAsync(subPortfolioId, reportingCurrency, prevDay.Date, latest.Date, ct);
+            lastDayChange = totalEquity.Amount - dayFlow - prevEquity;
             lastDayPct = prevEquity != 0 ? lastDayChange / prevEquity * 100m : null;
         }
 
-        // YTD = current equity - equity at start of year (or first snapshot of year)
+        // YTD: yıl başı özkaynak (o günkü nakitle) baz alınır; yıl içi net para yatırma kâr sayılmaz.
         var jan1 = new DateOnly(latest.Date.Year, 1, 1);
-        var startOfYear = snapshots.FirstOrDefault(s => s.Date >= jan1);
+        var startOfYear = snapshots.LastOrDefault(s => s.Date <= jan1) ?? snapshots.FirstOrDefault(s => s.Date >= jan1);
         decimal ytdChange = 0m;
         decimal? ytdPct = null;
         if (startOfYear is not null && startOfYear.Date != latest.Date)
         {
-            var soyEquity = startOfYear.MarketValue.Amount + cashBalance.Amount;
-            var currEquity = latest.MarketValue.Amount + cashBalance.Amount;
-            ytdChange = currEquity - soyEquity;
-            ytdPct = soyEquity != 0 ? ytdChange / soyEquity * 100m : null;
+            var soyCash = await _snapshots.CalculateCashBalanceAsync(subPortfolioId, reportingCurrency, ct, asOf: startOfYear.Date);
+            var soyEquity = startOfYear.MarketValue.Amount + soyCash.Amount;
+            var ytdFlow = await NetFlowBetweenAsync(subPortfolioId, reportingCurrency, startOfYear.Date, latest.Date, ct);
+            ytdChange = totalEquity.Amount - ytdFlow - soyEquity;
+            var investedBase = soyEquity + Math.Max(0m, ytdFlow);
+            ytdPct = investedBase > 0 ? ytdChange / investedBase * 100m : null;
         }
 
         return new KpiSummaryDto(
@@ -95,6 +98,26 @@ public class KpiService
             ytdPct,
             netCash.ToDto(),
             HasBaseline: snapshots.Count > 1);
+    }
+
+    // (afterExclusive, throughInclusive] aralığındaki net dış para akışı (+Deposit, −Withdraw).
+    private async Task<decimal> NetFlowBetweenAsync(
+        Guid subPortfolioId,
+        CurrencyCode reportingCurrency,
+        DateOnly afterExclusive,
+        DateOnly throughInclusive,
+        CancellationToken ct)
+    {
+        var fromCutoff = afterExclusive.ToDateTime(TimeOnly.MaxValue);
+        var toCutoff = throughInclusive.ToDateTime(TimeOnly.MaxValue);
+        var txs = await _db.CashTransactions
+            .Where(c => c.SubPortfolioId == subPortfolioId
+                && (c.Type == CashTxType.Deposit || c.Type == CashTxType.Withdraw)
+                && c.OccurredAt > fromCutoff && c.OccurredAt <= toCutoff)
+            .ToListAsync(ct);
+        return txs
+            .Where(t => t.Amount.Currency == reportingCurrency)
+            .Sum(t => t.Type == CashTxType.Deposit ? t.Amount.Amount : -t.Amount.Amount);
     }
 
     private async Task<Money> NetCashContributedAsync(

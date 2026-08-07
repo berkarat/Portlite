@@ -9,11 +9,20 @@ using Portlite.Shared.Dtos;
 
 namespace Portlite.Api.Services;
 
+public record SnapshotBackfillResult(
+    DateOnly From,
+    DateOnly To,
+    int Created,
+    int Updated,
+    int SymbolCount,
+    List<string> MissingSymbols);
+
 public class PortfolioSnapshotService
 {
     private readonly PortliteDbContext _db;
     private readonly PositionCalculator _positions;
     private readonly IPriceProvider _prices;
+    private readonly IHistoricalPriceProvider _history;
     private readonly PriceSnapshotStore _priceStore;
     private readonly ILogger<PortfolioSnapshotService> _log;
 
@@ -21,12 +30,14 @@ public class PortfolioSnapshotService
         PortliteDbContext db,
         PositionCalculator positions,
         IPriceProvider prices,
+        IHistoricalPriceProvider history,
         PriceSnapshotStore priceStore,
         ILogger<PortfolioSnapshotService> log)
     {
         _db = db;
         _positions = positions;
         _prices = prices;
+        _history = history;
         _priceStore = priceStore;
         _log = log;
     }
@@ -171,6 +182,133 @@ public class PortfolioSnapshotService
             missing);
     }
 
+    // Geçmiş fiyatlarla ilk işlem tarihinden bugüne günlük snapshot üretir (tek seferlik backfill).
+    public async Task<SnapshotBackfillResult> BackfillAsync(
+        Guid subPortfolioId,
+        DateOnly? from = null,
+        DateOnly? to = null,
+        CancellationToken ct = default)
+    {
+        var portfolioExists = await _db.SubPortfolios.AnyAsync(x => x.Id == subPortfolioId, ct);
+        if (!portfolioExists) throw new NotFoundException($"SubPortfolio {subPortfolioId} not found.");
+
+        var trades = await _db.Trades
+            .Where(t => t.SubPortfolioId == subPortfolioId)
+            .OrderBy(t => t.ExecutedAt)
+            .ToListAsync(ct);
+        if (trades.Count == 0) throw new ValidationException("Backfill için işlem yok.");
+
+        var start = from ?? DateOnly.FromDateTime(trades[0].ExecutedAt);
+        var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var reportingCurrency = CurrencyCode.USD;
+
+        // Sembol başına tek istekle tüm günlük kapanışları çek.
+        var symbols = trades.Select(t => t.AssetSymbol).Distinct().ToList();
+        var daysBack = (DateOnly.FromDateTime(DateTime.UtcNow).DayNumber - start.DayNumber) + 10;
+        var closes = new Dictionary<string, SortedList<DateOnly, decimal>>();
+        var missingSymbols = new List<string>();
+        foreach (var sym in symbols)
+        {
+            try
+            {
+                var bars = await _history.GetDailyBarsAsync(sym, daysBack, ct);
+                if (bars.Count == 0) { missingSymbols.Add(sym); continue; }
+                var list = new SortedList<DateOnly, decimal>();
+                foreach (var b in bars) list[b.Date] = b.Close;
+                closes[sym] = list;
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Backfill: {Symbol} için geçmiş fiyat alınamadı", sym);
+                missingSymbols.Add(sym);
+            }
+            await Task.Delay(250, ct); // rate limit nezaketi
+        }
+
+        var existing = await _db.PortfolioValueSnapshots
+            .Where(s => s.SubPortfolioId == subPortfolioId && s.Date >= start && s.Date <= end)
+            .ToDictionaryAsync(s => s.Date, ct);
+
+        // İşlemleri kronolojik replay ederek her günün pozisyon durumunu üret.
+        var state = new Dictionary<string, (decimal Qty, decimal TotalCost, decimal Realized)>();
+        int tradeIdx = 0, created = 0, updated = 0;
+
+        for (var date = start; date <= end; date = date.AddDays(1))
+        {
+            var dayEnd = date.ToDateTime(TimeOnly.MaxValue);
+            while (tradeIdx < trades.Count && trades[tradeIdx].ExecutedAt <= dayEnd)
+            {
+                var t = trades[tradeIdx++];
+                var s = state.GetValueOrDefault(t.AssetSymbol);
+                if (t.Side == TradeSide.Buy)
+                {
+                    s.TotalCost += t.Quantity * t.Price + t.Fee;
+                    s.Qty += t.Quantity;
+                }
+                else
+                {
+                    var avg = s.Qty > 0 ? s.TotalCost / s.Qty : 0m;
+                    var soldQty = Math.Min(t.Quantity, s.Qty);
+                    s.Realized += soldQty * (t.Price - avg) - t.Fee;
+                    s.TotalCost -= avg * soldQty;
+                    s.Qty -= t.Quantity;
+                }
+                state[t.AssetSymbol] = s;
+            }
+
+            if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) continue;
+
+            decimal marketValue = 0m, costBasis = 0m;
+            foreach (var (sym, s) in state)
+            {
+                if (s.Qty <= 0) continue;
+                costBasis += s.TotalCost;
+                var close = FindCloseOnOrBefore(closes.GetValueOrDefault(sym), date);
+                if (close.HasValue) marketValue += s.Qty * close.Value;
+            }
+            var realizedTotal = state.Values.Sum(s => s.Realized);
+
+            if (existing.TryGetValue(date, out var snap))
+            {
+                snap.MarketValue = new Money(marketValue, reportingCurrency);
+                snap.CostBasis = new Money(costBasis, reportingCurrency);
+                snap.RealizedPnL = new Money(realizedTotal, reportingCurrency);
+                snap.UnrealizedPnL = new Money(marketValue - costBasis, reportingCurrency);
+                updated++;
+            }
+            else
+            {
+                _db.PortfolioValueSnapshots.Add(new PortfolioValueSnapshot
+                {
+                    SubPortfolioId = subPortfolioId,
+                    Date = date,
+                    MarketValue = new Money(marketValue, reportingCurrency),
+                    CostBasis = new Money(costBasis, reportingCurrency),
+                    RealizedPnL = new Money(realizedTotal, reportingCurrency),
+                    UnrealizedPnL = new Money(marketValue - costBasis, reportingCurrency)
+                });
+                created++;
+            }
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return new SnapshotBackfillResult(start, end, created, updated, symbols.Count, missingSymbols);
+    }
+
+    private static decimal? FindCloseOnOrBefore(SortedList<DateOnly, decimal>? list, DateOnly date)
+    {
+        if (list is null || list.Count == 0) return null;
+        if (list.TryGetValue(date, out var exact)) return exact;
+        // O gün yoksa (tatil vb.) önceki en yakın kapanışı taşı.
+        decimal? best = null;
+        foreach (var (d, c) in list)
+        {
+            if (d > date) break;
+            best = c;
+        }
+        return best;
+    }
+
     public async Task<List<PortfolioSnapshotDto>> GetHistoryAsync(
         Guid subPortfolioId,
         DateOnly? from,
@@ -273,6 +411,7 @@ public class PortfolioSnapshotService
             balance += t.Side == TradeSide.Buy ? -(notional + t.Fee) : (notional - t.Fee);
         }
 
-        return new Money(balance, reportingCurrency);
+        // Nakit hiçbir zaman eksiye düşmez; yuvarlama artıkları 0'a kelepçelenir.
+        return new Money(Math.Max(0m, balance), reportingCurrency);
     }
 }

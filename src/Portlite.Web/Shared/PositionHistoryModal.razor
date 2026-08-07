@@ -1,0 +1,152 @@
+@using Portlite.Shared.Dtos
+@using Portlite.Domain.Enums
+@inject ApiClient Api
+
+<Modal IsOpen="@IsOpen" Title="@($"{Symbol} — İşlem Geçmişi")" Width="760" OnClose="OnClose" CloseOnBackdropClick="true">
+    <Body>
+        @if (_loading)
+        {
+            <div class="empty" style="padding:30px 0;">
+                <div class="skeleton" style="height:16px;width:55%;margin:0 auto 10px;"></div>
+                <div class="skeleton" style="height:14px;width:35%;margin:0 auto;"></div>
+            </div>
+        }
+        else if (_rows.Count == 0)
+        {
+            <div class="empty" style="padding:30px 0;">Bu sembol için işlem bulunamadı.</div>
+        }
+        else
+        {
+            <div class="pos-history__summary">
+                <div class="perf-stat">
+                    <div class="perf-stat__lbl">İŞLEM</div>
+                    <div class="perf-stat__val num">@_rows.Count</div>
+                </div>
+                <div class="perf-stat">
+                    <div class="perf-stat__lbl">AÇIK ADET</div>
+                    <div class="perf-stat__val num">@Format.Qty(_openQty)</div>
+                    <div class="perf-stat__sub">@(_openQty > 0 ? $"ort. ${_avgCost:N2}" : "pozisyon kapalı")</div>
+                </div>
+                <div class="perf-stat perf-stat--accent">
+                    <div class="perf-stat__lbl">GERÇEKLEŞEN K/Z</div>
+                    <div class="perf-stat__val num @(_totalRealized >= 0 ? "pos" : "neg")">
+                        @((_totalRealized > 0 ? "+" : _totalRealized < 0 ? "−" : "") + "$" + Math.Abs(_totalRealized).ToString("N2"))
+                    </div>
+                </div>
+            </div>
+
+            <table class="dt dt--compact">
+                <thead>
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Yön</th>
+                        <th class="right">Adet</th>
+                        <th class="right">Fiyat</th>
+                        <th class="right">Tutar</th>
+                        <th class="right">K/Z</th>
+                        <th class="right">Küm. K/Z</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _rows)
+                    {
+                        <tr>
+                            <td class="num">@r.When.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                            <td>
+                                <span class="@(r.IsBuy ? "tag-pos" : "tag-neg")">@(r.IsBuy ? "AL" : "SAT")</span>
+                            </td>
+                            <td class="right num">@Format.Qty(r.Qty)</td>
+                            <td class="right num">$@r.Price.ToString("N2")</td>
+                            <td class="right num">$@r.Notional.ToString("N2")</td>
+                            <td class="right num @(r.Realized.HasValue ? Format.DeltaClass(r.Realized.Value) : "tag-flat")">
+                                @if (r.Realized.HasValue)
+                                {
+                                    var v = r.Realized.Value;
+                                    <span>@((v > 0 ? "+" : v < 0 ? "−" : "") + "$" + Math.Abs(v).ToString("N2"))</span>
+                                }
+                                else { @("—") }
+                            </td>
+                            <td class="right num @(r.Realized.HasValue ? Format.DeltaClass(r.CumRealized) : "tag-flat")">
+                                @if (r.Realized.HasValue)
+                                {
+                                    <span>@((r.CumRealized > 0 ? "+" : r.CumRealized < 0 ? "−" : "") + "$" + Math.Abs(r.CumRealized).ToString("N2"))</span>
+                                }
+                                else { @("—") }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </Body>
+</Modal>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Guid? PortfolioId { get; set; }
+    [Parameter] public string? Symbol { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool _loading;
+    private bool _wasOpen;
+    private List<Row> _rows = new();
+    private decimal _openQty, _avgCost, _totalRealized;
+
+    private record Row(DateTime When, bool IsBuy, decimal Qty, decimal Price, decimal Notional, decimal? Realized, decimal CumRealized);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!IsOpen) { _wasOpen = false; return; }
+        if (_wasOpen || PortfolioId is null || string.IsNullOrEmpty(Symbol)) return;
+        _wasOpen = true;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _rows = new();
+        try
+        {
+            var trades = await Api.ListTradesAsync(PortfolioId!.Value) ?? new();
+            var mine = trades
+                .Where(t => string.Equals(t.AssetSymbol, Symbol, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(t => t.ExecutedAt)
+                .ToList();
+
+            // Ortalama maliyet replay'i — PositionCalculator ile birebir aynı mantık.
+            decimal qty = 0m, totalCost = 0m, cumRealized = 0m;
+            foreach (var t in mine)
+            {
+                if (t.Side == TradeSide.Buy)
+                {
+                    totalCost += t.Quantity * t.Price + t.Fee;
+                    qty += t.Quantity;
+                    _rows.Add(new Row(t.ExecutedAt, true, t.Quantity, t.Price, t.Quantity * t.Price, null, cumRealized));
+                }
+                else
+                {
+                    var avg = qty > 0 ? totalCost / qty : 0m;
+                    var soldQty = Math.Min(t.Quantity, qty);
+                    var realized = soldQty * (t.Price - avg) - t.Fee;
+                    cumRealized += realized;
+                    totalCost -= avg * soldQty;
+                    qty -= t.Quantity;
+                    _rows.Add(new Row(t.ExecutedAt, false, t.Quantity, t.Price, t.Quantity * t.Price, realized, cumRealized));
+                }
+            }
+            _openQty = qty;
+            _avgCost = qty > 0 ? totalCost / qty : 0m;
+            _totalRealized = cumRealized;
+            _rows.Reverse(); // en yeni üstte
+        }
+        catch
+        {
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

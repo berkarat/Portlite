@@ -1748,6 +1748,19 @@ table.dt td .badge--option {
 }
 
 /* ============================================================
+   Position history modal + clickable rows
+   ============================================================ */
+.row-clickable { cursor: pointer; }
+.row-clickable:hover td { background: var(--bg-subtle); }
+.pos-history__summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.dt--compact th, .dt--compact td { padding: 7px 10px; font-size: 12px; }
+
+/* ============================================================
    Form helpers
    ============================================================ */
 .field__hint {
@@ -2624,336 +2637,24 @@ table.dt td .badge--option {
 }
 
 /* ============================================================
-   Porttech
+   Kapanan pozisyonlar pager
    ============================================================ */
-.porttech-date-select {
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-}
-.porttech-report { margin-top: 16px; }
-.porttech-section-title {
-    color: var(--text-primary);
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 12px;
-}
-.porttech-meta {
-    color: var(--text-secondary);
-    font-size: 13px;
-    margin-bottom: 16px;
-}
-.porttech-exec-summary {
-    color: var(--text-primary);
-    line-height: 1.7;
-    font-size: 14px;
-    white-space: pre-line;
-}
-.porttech-exec-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+.closed-pager {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
     gap: 12px;
+    padding: 12px 4px 4px;
 }
-.porttech-grid-card {
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
+.closed-pager__info {
+    font-size: 12px;
+    color: var(--text-secondary);
+    min-width: 48px;
     text-align: center;
 }
-.porttech-grid-num {
-    font-size: 32px;
-    font-weight: 700;
-    line-height: 1;
-    margin-bottom: 4px;
-}
-.porttech-grid-card--red .porttech-grid-num { color: #ef4444; }
-.porttech-grid-card--green .porttech-grid-num { color: #22c55e; }
-.porttech-grid-card--orange .porttech-grid-num { color: #f97316; }
-.porttech-grid-card--blue .porttech-grid-num { color: #3b82f6; }
-.porttech-grid-label {
-    color: var(--text-secondary);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
-}
-.porttech-grid-detail {
-    color: var(--text-tertiary);
-    font-size: 11px;
-    word-break: break-word;
-}
-/* alerts */
-.porttech-alerts { display: flex; flex-direction: column; gap: 8px; }
-.porttech-alert {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 12px 16px;
-    border-radius: 8px;
-    background: var(--bg-subtle);
-    border-left: 4px solid var(--border);
-}
-.porttech-alert--kritik { border-left-color: #ef4444; }
-.porttech-alert--uyari { border-left-color: #f59e0b; }
-.porttech-alert--bilgi { border-left-color: #3b82f6; }
-.porttech-alert--firsat { border-left-color: #22c55e; }
-.porttech-alert__badge {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    padding: 2px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
-}
-.porttech-alert--kritik .porttech-alert__badge { background: #ef444420; color: #ef4444; }
-.porttech-alert--uyari .porttech-alert__badge { background: #f59e0b20; color: #f59e0b; }
-.porttech-alert--bilgi .porttech-alert__badge { background: #3b82f620; color: #3b82f6; }
-.porttech-alert--firsat .porttech-alert__badge { background: #22c55e20; color: #22c55e; }
-.porttech-alert__symbol {
-    font-weight: 700;
-    color: var(--text-primary);
-    min-width: 50px;
-}
-.porttech-alert__msg {
-    color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 1.5;
-}
-/* action badges */
-.porttech-action-badge {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
-}
-.action--red { background: #ef444420; color: #ef4444; }
-.action--green { background: #22c55e20; color: #22c55e; }
-.action--blue { background: #3b82f620; color: #3b82f6; }
-.action--orange { background: #f9731620; color: #f97316; }
-.porttech-reasoning {
-    font-size: 12px;
-    color: var(--text-secondary);
-    line-height: 1.5;
-    max-width: 500px;
-}
-/* TC score badges */
-.porttech-tc {
-    display: inline-block;
-    font-weight: 700;
-    font-size: 13px;
-    padding: 2px 8px;
-    border-radius: 4px;
-}
-.tc--strong { background: #22c55e20; color: #22c55e; }
-.tc--healthy { background: #3b82f620; color: #3b82f6; }
-.tc--weak { background: #f59e0b20; color: #f59e0b; }
-.tc--dead { background: #ef444420; color: #ef4444; }
-/* footer */
-.porttech-footer {
-    margin-top: 24px;
-    padding: 12px 0;
-    font-size: 11px;
-    color: var(--text-muted);
-    text-align: right;
-}
-
-/* 3 Summary Badge Cards */
-.porttech-badges-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 12px;
-    margin-top: 16px;
-}
-.porttech-badge-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 16px 20px;
-    border-radius: 10px;
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--border);
-}
-.porttech-badge-card--info { border-left-color: #3b82f6; }
-.porttech-badge-card--danger { border-left-color: #ef4444; }
-.porttech-badge-card--success { border-left-color: #22c55e; }
-.porttech-badge-card__icon {
-    font-size: 20px;
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-.porttech-badge-card__content { flex: 1; min-width: 0; }
-.porttech-badge-card__title {
-    font-weight: 700;
-    font-size: 13px;
-    color: var(--text-primary);
-    margin-bottom: 4px;
-}
-.porttech-badge-card__text {
-    font-size: 12px;
-    color: var(--text-secondary);
-    line-height: 1.5;
-}
-.porttech-strong-sym {
-    font-weight: 600;
-    color: var(--gain);
-    margin-right: 6px;
-}
-
-/* Context Box */
-.porttech-context-box {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    padding: 16px 20px;
-    border-radius: 10px;
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-}
-.porttech-ctx-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 120px;
-}
-.porttech-ctx-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-muted);
-}
-.porttech-ctx-value {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-.porttech-stance--savunmacı { color: #f59e0b; }
-.porttech-stance--nötr { color: #3b82f6; }
-.porttech-stance--agresif { color: #ef4444; }
-
-/* Stop & Target columns */
-.porttech-stop, .porttech-target {
-    font-size: 12px;
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
-.porttech-stop { color: #ef4444; }
-.porttech-target { color: #22c55e; }
-
-/* Yani (plain language summary) */
-.porttech-yani {
-    margin-top: 6px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    background: rgba(59, 130, 246, 0.06);
-    border-left: 3px solid #3b82f6;
-    font-size: 12px;
-    font-style: italic;
-    color: var(--text-primary);
-    line-height: 1.5;
-}
-
-/* Summary Note */
-.porttech-summary-note {
-    margin-top: 20px;
-    padding: 14px 18px;
-    border-radius: 8px;
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-    font-size: 13px;
-    color: var(--text-secondary);
-    line-height: 1.6;
-}
-
-/* Glossary */
-.porttech-glossary {
-    margin-top: 24px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--bg-subtle);
-    overflow: hidden;
-}
-.porttech-glossary__toggle {
-    cursor: pointer;
-    padding: 14px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    list-style: none;
-    user-select: none;
-}
-.porttech-glossary__toggle::-webkit-details-marker { display: none; }
-.porttech-glossary__toggle::before {
-    content: "▸ ";
-    transition: transform 0.2s;
-}
-.porttech-glossary[open] .porttech-glossary__toggle::before {
-    content: "▾ ";
-}
-.porttech-glossary__body {
-    padding: 0 20px 20px;
-}
-.porttech-glossary__list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-}
-.porttech-glossary__list li {
-    font-size: 13px;
-    color: var(--text-secondary);
-    line-height: 1.6;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-}
-.porttech-glossary__list li:last-child {
-    border-bottom: none;
-}
-.porttech-glossary__list li strong {
-    color: var(--text-primary);
-}
-
-/* Porttech Badge in position table */
-.porttech-badge {
-    display: inline-flex;
-    align-items: center;
-    font-size: 9px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 4px;
-    margin-left: 0;
-    vertical-align: middle;
-    letter-spacing: 0.03em;
-    font-family: var(--font-sans);
-    white-space: nowrap;
-    line-height: 1.4;
-}
-.porttech-badge--strong {
-    background: rgba(34, 197, 94, 0.15);
-    color: var(--gain);
-    border: 1px solid rgba(34, 197, 94, 0.3);
-}
-.porttech-badge--healthy {
-    background: rgba(59, 130, 246, 0.12);
-    color: #60a5fa;
-    border: 1px solid rgba(59, 130, 246, 0.3);
-}
-.porttech-badge--watch {
-    background: rgba(245, 158, 11, 0.12);
-    color: #f59e0b;
-    border: 1px solid rgba(245, 158, 11, 0.3);
-}
-.porttech-badge--critical {
-    background: rgba(239, 68, 68, 0.12);
-    color: var(--loss);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+.closed-pager .btn[disabled] {
+    opacity: 0.4;
+    cursor: default;
 }
 
 /* Trade notes column */

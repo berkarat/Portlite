@@ -4,13 +4,13 @@
 @inject IJSRuntime Js
 @implements IDisposable
 
-<PageTitle>Portlite — Portfolio</PageTitle>
+<PageTitle>Portlite — Portföy</PageTitle>
 
 <div class="page-title-row">
     <div class="page-title-row__main">
         <div class="eyebrow">@DateTime.Now.ToString("dd MMMM yyyy · dddd", _trCulture)</div>
         <h1 class="page-title page-title--hero">
-            <span class="page-title__accent">Portfolio</span>
+            <span class="page-title__accent">Portföy</span>
             @if (Store.Selected is not null)
             {
                 <span class="page-title__badge">@Store.Selected.Name</span>
@@ -118,7 +118,7 @@ else
                 · Nakit <strong class="num" style="color:var(--text-secondary);">@Mask(Format.Money(_kpi.CashBalance))</strong>
             </div>
             <div style="margin-top:6px; font-size:12px; color:var(--text-tertiary);">
-                Başlangıç <strong class="num" style="color:var(--text-secondary);">@Mask(Format.Money(_kpi.NetCashContributed))</strong>
+                Yatırılan <strong class="num" style="color:var(--text-secondary);">@Mask(Format.Money(_kpi.NetCashContributed))</strong>
                 @if (_snapshot is not null)
                 {
                     <text> · Önc. kapanış <strong class="num" style="color:var(--text-secondary);">@Mask("$" + (_kpi.TotalEquity.Amount - IntradayChange).ToString("N0"))</strong></text>
@@ -135,7 +135,7 @@ else
                 <div class="kpi__label"><span class="kpi__label-text">SON 7 GÜN</span></div>
                 <div class="kpi__value @Format.DeltaClassPct(WeekReturnPct)">@Format.SignedPct(WeekReturnPct)</div>
                 <div class="kpi__sub num">
-                    @if (WeekReturnAmount != 0) { <text>@(WeekReturnAmount > 0 ? "+" : "")$@Math.Abs(WeekReturnAmount).ToString("N0")</text> }
+                    @if (WeekReturnAmount != 0) { <text>@(WeekReturnAmount > 0 ? "+" : "−")$@Math.Abs(WeekReturnAmount).ToString("N0")</text> }
                     @if (_spyWeekPct.HasValue) { <text> · SPX @Format.SignedPct(_spyWeekPct)</text> }
                     @if (_qqqWeekPct.HasValue) { <text> · NDX @Format.SignedPct(_qqqWeekPct)</text> }
                 </div>
@@ -144,7 +144,7 @@ else
                 <div class="kpi__label"><span class="kpi__label-text">MTD · @DateTime.Now.ToString("MMMM", _trCulture).ToUpper()</span></div>
                 <div class="kpi__value @Format.DeltaClassPct(MtdReturnPct)">@Format.SignedPct(MtdReturnPct)</div>
                 <div class="kpi__sub num">
-                    @if (MtdReturnAmount != 0) { <text>@(MtdReturnAmount > 0 ? "+" : "")$@Math.Abs(MtdReturnAmount).ToString("N0")</text> }
+                    @if (MtdReturnAmount != 0) { <text>@(MtdReturnAmount > 0 ? "+" : "−")$@Math.Abs(MtdReturnAmount).ToString("N0")</text> }
                     @if (_spyMtdPct.HasValue) { <text> · SPX @Format.SignedPct(_spyMtdPct)</text> }
                     @if (_qqqMtdPct.HasValue) { <text> · NDX @Format.SignedPct(_qqqMtdPct)</text> }
                 </div>
@@ -153,7 +153,7 @@ else
                 <div class="kpi__label"><span class="kpi__label-text">YTD @DateTime.Now.Year</span></div>
                 <div class="kpi__value @Format.DeltaClassPct(_kpi.YtdChangePercent)">@Format.SignedPct(_kpi.YtdChangePercent)</div>
                 <div class="kpi__sub num">
-                    @((_kpi.YtdChange.Amount > 0 ? "+" : "") + "$" + Math.Abs(_kpi.YtdChange.Amount).ToString("N0"))
+                    @((_kpi.YtdChange.Amount > 0 ? "+" : _kpi.YtdChange.Amount < 0 ? "−" : "") + "$" + Math.Abs(_kpi.YtdChange.Amount).ToString("N0"))
                     @if (_spyYtdPct.HasValue) { <text> · SPX @Format.SignedPct(_spyYtdPct)</text> }
                     @if (_qqqYtdPct.HasValue) { <text> · NDX @Format.SignedPct(_qqqYtdPct)</text> }
                 </div>
@@ -162,14 +162,14 @@ else
                 <div class="kpi__label"><span class="kpi__label-text">ALL TIME</span></div>
                 <div class="kpi__value @Format.DeltaClassPct(_kpi.AllTimePnLPercent)">@Format.SignedPct(_kpi.AllTimePnLPercent)</div>
                 <div class="kpi__sub num">
-                    @((_kpi.AllTimePnL.Amount > 0 ? "+" : "") + "$" + Math.Abs(_kpi.AllTimePnL.Amount).ToString("N0"))
+                    @((_kpi.AllTimePnL.Amount > 0 ? "+" : _kpi.AllTimePnL.Amount < 0 ? "−" : "") + "$" + Math.Abs(_kpi.AllTimePnL.Amount).ToString("N0"))
                     @if (_spyAllTimePct.HasValue) { <text> · SPX @Format.SignedPct(_spyAllTimePct)</text> }
                     @if (_qqqAllTimePct.HasValue) { <text> · NDX @Format.SignedPct(_qqqAllTimePct)</text> }
                 </div>
             </div>
             <div class="kpi">
-                <div class="kpi__label"><span class="kpi__label-text">GERÇEKLEŞEN KÂR</span></div>
-                <div class="kpi__value @Format.DeltaClass(TotalRealizedPnL)">@Mask((TotalRealizedPnL > 0 ? "+" : "") + "$" + Math.Abs(TotalRealizedPnL).ToString("N0"))</div>
+                <div class="kpi__label"><span class="kpi__label-text">GERÇEKLEŞEN K/Z</span></div>
+                <div class="kpi__value @Format.DeltaClass(TotalRealizedPnL)">@Mask((TotalRealizedPnL > 0 ? "+" : TotalRealizedPnL < 0 ? "−" : "") + "$" + Math.Abs(TotalRealizedPnL).ToString("N0"))</div>
                 <div class="kpi__sub num">
                     @if (ClosedPositions.Count > 0) { <text>@ClosedPositions.Count kapanan pozisyon</text> }
                     else { <text>Kapanan pozisyon yok</text> }
@@ -397,7 +397,7 @@ else
                             <RadzenMarkers MarkerType="MarkerType.None" />
                         </RadzenLineSeries>
                     }
-                    <RadzenCategoryAxis Padding="16" FormatString="{0:dd MMM}" />
+                    <RadzenCategoryAxis Padding="16" FormatString="{0:dd MMM}" Step="@PerfAxisStep" />
                     <RadzenValueAxis FormatString="{0:N1}%" />
                     <RadzenLegend Position="LegendPosition.Bottom" />
                 </RadzenChart>
@@ -436,8 +436,10 @@ else
                     @foreach (var p in VisiblePositions)
                     {
                         <tr draggable="true"
-                            class="@(_draggingSymbol == p.AssetSymbol ? "row-dragging" : "")"
+                            class="row-clickable @(_draggingSymbol == p.AssetSymbol ? "row-dragging" : "")"
+                            title="İşlem geçmişi için tıkla"
                             ondragover="event.preventDefault()"
+                            @onclick="@(() => OpenHistory(p.AssetSymbol))"
                             @ondragstart="@(() => OnDragStart(p.AssetSymbol))"
                             @ondrop="@(() => OnDrop(p.AssetSymbol))"
                             @ondragend="@(() => _draggingSymbol = null)">
@@ -445,10 +447,6 @@ else
                             <td>
                                 <div class="ticker">
                                     <span>@p.AssetSymbol</span>
-                                    @if (_porttechBadges.TryGetValue(p.AssetSymbol, out var badge))
-                                    {
-                                        <span class="porttech-badge porttech-badge--@badge.CssClass" title="Porttech: @badge.Label">@badge.Label</span>
-                                    }
                                 </div>
                                 <div class="ticker-name">@p.AssetName</div>
                             </td>
@@ -470,7 +468,7 @@ else
                                 @if (p.DayChange.HasValue)
                                 {
                                     var d = p.DayChange.Value;
-                                    <div>@(d > 0 ? "+" : "")@Format.Sign(p.Currency)@Math.Abs(d).ToString("N2")</div>
+                                    <div>@(d > 0 ? "+" : d < 0 ? "−" : "")@Format.Sign(p.Currency)@Math.Abs(d).ToString("N2")</div>
                                     <div style="font-size:11px;">@Format.SignedPct(p.DayChangePercent)</div>
                                 }
                                 else { @("—") }
@@ -499,7 +497,7 @@ else
                                 {
                                     var u = p.UnrealizedPnL.Value;
                                     var pct = p.TotalCost > 0 ? (decimal?)(u / p.TotalCost * 100m) : null;
-                                    <div>@Mask((u > 0 ? "+" : "") + Format.Sign(p.Currency) + Math.Abs(u).ToString("N2"))</div>
+                                    <div>@Mask((u > 0 ? "+" : u < 0 ? "−" : "") + Format.Sign(p.Currency) + Math.Abs(u).ToString("N2"))</div>
                                     <div style="font-size:11px;">@Format.SignedPct(pct)</div>
                                 }
                                 else { @("—") }
@@ -507,7 +505,7 @@ else
                             <td class="right num @(p.RealizedPnL != 0 ? Format.DeltaClass(p.RealizedPnL) : "tag-flat")">
                                 @if (p.RealizedPnL != 0)
                                 {
-                                    <div>@Mask((p.RealizedPnL > 0 ? "+" : "") + Format.Sign(p.Currency) + Math.Abs(p.RealizedPnL).ToString("N2"))</div>
+                                    <div>@Mask((p.RealizedPnL > 0 ? "+" : p.RealizedPnL < 0 ? "−" : "") + Format.Sign(p.Currency) + Math.Abs(p.RealizedPnL).ToString("N2"))</div>
                                 }
                                 else { @("—") }
                             </td>
@@ -524,7 +522,7 @@ else
             <div class="panel__head">
                 <div>
                     <div class="section-title">Kapanan Pozisyonlar</div>
-                    <div class="eyebrow">@ClosedPositions.Count sembol · gerçekleşen toplam @Mask((TotalClosedRealizedPnL > 0 ? "+" : "") + "$" + Math.Abs(TotalClosedRealizedPnL).ToString("N2"))</div>
+                    <div class="eyebrow">@ClosedPositions.Count sembol · gerçekleşen toplam @Mask((TotalClosedRealizedPnL > 0 ? "+" : TotalClosedRealizedPnL < 0 ? "−" : "") + "$" + Math.Abs(TotalClosedRealizedPnL).ToString("N2"))</div>
                 </div>
             </div>
             <table class="dt">
@@ -537,9 +535,9 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var p in ClosedPositions)
+                    @foreach (var p in PagedClosedPositions)
                     {
-                        <tr>
+                        <tr class="row-clickable" title="İşlem geçmişi için tıkla" @onclick="@(() => OpenHistory(p.AssetSymbol))">
                             <td>
                                 <div class="ticker"><span>@p.AssetSymbol</span></div>
                                 <div class="ticker-name">@p.AssetName</div>
@@ -547,12 +545,20 @@ else
                             <td class="right num">@p.TradeCount</td>
                             <td class="right num">@(p.LastTradeAt?.ToLocalTime().ToString("dd.MM.yyyy") ?? "—")</td>
                             <td class="right num @(p.RealizedPnL != 0 ? Format.DeltaClass(p.RealizedPnL) : "tag-flat")">
-                                @Mask((p.RealizedPnL > 0 ? "+" : "") + Format.Sign(p.Currency) + Math.Abs(p.RealizedPnL).ToString("N2"))
+                                @Mask((p.RealizedPnL > 0 ? "+" : p.RealizedPnL < 0 ? "−" : "") + Format.Sign(p.Currency) + Math.Abs(p.RealizedPnL).ToString("N2"))
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
+            @if (ClosedPageCount > 1)
+            {
+                <div class="closed-pager">
+                    <button class="btn btn--ghost" disabled="@(_closedPage <= 0)" @onclick="() => _closedPage--">‹ Önceki</button>
+                    <span class="closed-pager__info num">@(_closedPage + 1) / @ClosedPageCount</span>
+                    <button class="btn btn--ghost" disabled="@(_closedPage >= ClosedPageCount - 1)" @onclick="() => _closedPage++">Sonraki ›</button>
+                </div>
+            }
         </div>
     }
 }
@@ -560,6 +566,11 @@ else
 <AnalysisModal IsOpen="@_aiOpen"
                PortfolioId="@Store.SelectedId"
                OnClose="() => _aiOpen = false" />
+
+<PositionHistoryModal IsOpen="@_historyOpen"
+                      PortfolioId="@Store.SelectedId"
+                      Symbol="@_historySymbol"
+                      OnClose="() => _historyOpen = false" />
 
 <Modal IsOpen="@_tradeModalOpen" Title="Yeni İşlem" OnClose="CloseTradeModal" Width="580" CloseOnBackdropClick="true">
     <Body>
@@ -777,7 +788,6 @@ else
     private List<PortfolioSnapshotDto> _snapshots = new();
     private Guid? _lastLoadedId;
     private DateTime? _lastUpdated;
-    private Dictionary<string, PorttechBadgeInfo> _porttechBadges = new();
 
     private System.Threading.Timer? _pollTimer;
     private const int PollIntervalSeconds = 300;
@@ -853,22 +863,27 @@ else
         var endEq = _kpi.TotalEquity.Amount;
         var flow = NetExternalFlow(anchor.Date, TodayDate);
         var amount = endEq - startEq - flow;
-        return (amount, amount / startEq * 100m);
+        // Yatırılan sermayeye göre yüzde: dönem başı + dönemde yatırılan net para.
+        var investedBase = startEq + Math.Max(0m, flow);
+        return (amount, investedBase > 0 ? amount / investedBase * 100m : null);
     }
 
     private decimal? WeekReturnPct => AdjustedReturn(TodayDate.AddDays(-7))?.pct;
     private decimal WeekReturnAmount => AdjustedReturn(TodayDate.AddDays(-7))?.amount ?? 0m;
 
-    // MTD: dönem başı = ay içindeki İLK snapshot (ay başı veri boşluğundaki sıçramadan kaçın).
+    // MTD: dönem başı = ay başından önceki son snapshot (grafikle aynı baz); yoksa ay içindeki ilk.
     private (decimal amount, decimal? pct)? MtdReturn()
     {
         if (_snapshots is null || _kpi is null) return null;
-        var anchor = _snapshots.FirstOrDefault(s => s.Date >= MonthStart && s.Date < TodayDate);
+        var anchor = _snapshots.LastOrDefault(s => s.Date <= MonthStart)
+                     ?? _snapshots.FirstOrDefault(s => s.Date >= MonthStart && s.Date < TodayDate);
         if (anchor is null) return null;
         var startEq = anchor.TotalEquity.Amount;
         if (startEq <= 0) return null;
-        var amount = _kpi.TotalEquity.Amount - startEq - NetExternalFlow(anchor.Date, TodayDate);
-        return (amount, amount / startEq * 100m);
+        var flow = NetExternalFlow(anchor.Date, TodayDate);
+        var amount = _kpi.TotalEquity.Amount - startEq - flow;
+        var investedBase = startEq + Math.Max(0m, flow);
+        return (amount, investedBase > 0 ? amount / investedBase * 100m : null);
     }
     private decimal? MtdReturnPct => MtdReturn()?.pct;
     private decimal MtdReturnAmount => MtdReturn()?.amount ?? 0m;
@@ -1026,6 +1041,20 @@ else
     // Yalnızca kapanmış pozisyonların gerçekleşen K/Z toplamı.
     private decimal TotalClosedRealizedPnL =>
         ClosedPositions.Sum(p => p.RealizedPnL);
+
+    // Kapanan pozisyonlar sayfalama (son işlem tarihine göre sıralı, sayfa başına 10).
+    private const int ClosedPageSize = 10;
+    private int _closedPage;
+    private int ClosedPageCount => (ClosedPositions.Count + ClosedPageSize - 1) / ClosedPageSize;
+    private List<PositionDto> PagedClosedPositions
+    {
+        get
+        {
+            var list = ClosedPositions;
+            if (_closedPage >= ClosedPageCount) _closedPage = Math.Max(0, ClosedPageCount - 1);
+            return list.Skip(_closedPage * ClosedPageSize).Take(ClosedPageSize).ToList();
+        }
+    }
 
     // ─── Tema Dağılımı ─────────────────────────────────────────────
     public class ThemeSlice
@@ -1226,6 +1255,25 @@ else
             .Sum(p => p.MarketValue!.Value);
 
     private static readonly System.Globalization.CultureInfo _trCulture = new("tr-TR");
+
+    private bool _historyOpen;
+    private string? _historySymbol;
+
+    private void OpenHistory(string symbol)
+    {
+        _historySymbol = symbol;
+        _historyOpen = true;
+    }
+
+    private TimeSpan PerfAxisStep
+    {
+        get
+        {
+            if (_perfStartDate is null || _perfEndDate is null) return TimeSpan.FromDays(1);
+            var days = Math.Max(1, _perfEndDate.Value.DayNumber - _perfStartDate.Value.DayNumber);
+            return TimeSpan.FromDays(Math.Max(1, (int)Math.Ceiling(days / 8.0)));
+        }
+    }
 
     private static readonly TimeZoneInfo _eastern = GetEasternTimeZone();
 
@@ -1470,7 +1518,6 @@ else
             ApplyPriceFlash();
             BuildPerformanceSeries(snaps, _spyHistory);
             ComputeBenchmarkReturns();
-            _ = LoadPorttechBadgesAsync(id);
             _ = LoadSparklinesAsync();
 
             _lastUpdated = DateTime.UtcNow;
@@ -1718,16 +1765,23 @@ else
         // Katkı-arındırılmış: dönemdeki net para yatırma/çekmeyi değişimden çıkar.
         var endFlow = NetExternalFlow(baseSnap.Date, window[^1].Date);
         _perfChangeAmount = (_perfCurrentEquity.Value - endFlow) - baseValue;
-        _perfChangePct = baseValue > 0 ? _perfChangeAmount / baseValue * 100m : null;
+        // Yüzde, dönem başı değer + dönemde yatırılan net paraya göre (basit para-ağırlıklı).
+        var investedBase = baseValue + Math.Max(0m, endFlow);
+        _perfChangePct = investedBase > 0 ? _perfChangeAmount / investedBase * 100m : null;
 
         if (baseValue > 0)
         {
             _perfPortfolioSeries = window
-                .Select(s => new PerfPoint
+                .Select(s =>
                 {
-                    Date = s.Date.ToDateTime(TimeOnly.MinValue),
-                    // Her noktada, dönem başından o güne kadarki net para akışını çıkar.
-                    Value = (s.TotalEquity.Amount - NetExternalFlow(baseSnap.Date, s.Date) - baseValue) / baseValue * 100m
+                    var flow = NetExternalFlow(baseSnap.Date, s.Date);
+                    var denom = baseValue + Math.Max(0m, flow);
+                    return new PerfPoint
+                    {
+                        Date = s.Date.ToDateTime(TimeOnly.MinValue),
+                        // Her noktada, o güne kadarki net para akışını çıkar ve yatırılan sermayeye böl.
+                        Value = denom > 0 ? (s.TotalEquity.Amount - flow - baseValue) / denom * 100m : 0m
+                    };
                 })
                 .ToList();
         }
@@ -1854,81 +1908,6 @@ else
             if (_loading || Store.SelectedId is null) return;
             try { await InvokeAsync(StateHasChanged); } catch { }
         }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
-    }
-
-    private async Task LoadPorttechBadgesAsync(Guid portfolioId)
-    {
-        try
-        {
-            var report = await Api.GetLatestPorttechAsync(portfolioId);
-            if (report is null || string.IsNullOrEmpty(report.ReportJson)) return;
-
-            var parsed = System.Text.Json.JsonSerializer.Deserialize<PorttechBadgeReport>(
-                report.ReportJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
-
-            if (parsed?.PositionSummary is null) return;
-
-            var badges = new Dictionary<string, PorttechBadgeInfo>();
-            var alerts = parsed.Alerts ?? new();
-
-            foreach (var pos in parsed.PositionSummary)
-            {
-                var alertCount = alerts.Count(a => string.Equals(a.Symbol, pos.Symbol, StringComparison.OrdinalIgnoreCase));
-                var label = pos.TcLabel ?? "?";
-                var css = pos.TcScore switch
-                {
-                    >= 85 => "strong",
-                    >= 60 => "healthy",
-                    >= 40 => "watch",
-                    _ => "critical"
-                };
-                badges[pos.Symbol] = new PorttechBadgeInfo(label, css, alertCount);
-            }
-
-            _porttechBadges = badges;
-            await InvokeAsync(StateHasChanged);
-        }
-        catch { /* silent — badges are non-critical */ }
-    }
-
-    private class PorttechBadgeInfo
-    {
-        public string Label { get; }
-        public string CssClass { get; }
-        public int AlertCount { get; }
-        public PorttechBadgeInfo(string label, string cssClass, int alertCount)
-        {
-            Label = label;
-            CssClass = cssClass;
-            AlertCount = alertCount;
-        }
-    }
-
-    private class PorttechBadgeReport
-    {
-        [System.Text.Json.Serialization.JsonPropertyName("position_summary")]
-        public List<PorttechBadgePosition>? PositionSummary { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("alerts")]
-        public List<PorttechBadgeAlert>? Alerts { get; set; }
-    }
-
-    private class PorttechBadgePosition
-    {
-        [System.Text.Json.Serialization.JsonPropertyName("symbol")]
-        public string Symbol { get; set; } = "";
-
-        [System.Text.Json.Serialization.JsonPropertyName("tc_score")]
-        public int TcScore { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("tc_label")]
-        public string? TcLabel { get; set; }
-    }
-
-    private class PorttechBadgeAlert
-    {
-        [System.Text.Json.Serialization.JsonPropertyName("symbol")]
-        public string Symbol { get; set; } = "";
     }
 
     public void Dispose()

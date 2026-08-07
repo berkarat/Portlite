@@ -55,6 +55,7 @@ public class PortfolioAnalysisServiceTests
         var snap = new PortfolioSnapshotService(
             db, posCalc,
             Mock.Of<IPriceProvider>(),
+            Mock.Of<IHistoricalPriceProvider>(),
             priceStore,
             NullLogger<PortfolioSnapshotService>.Instance);
         return new PortfolioAnalysisService(
