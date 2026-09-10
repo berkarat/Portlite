@@ -1,49 +1,45 @@
-name: Deploy to Azure App Service
+name: Deploy Portlite
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
-permissions:
-  id-token: write
-  contents: read
-
-env:
-  AZURE_WEBAPP_NAME: portlite-web
-  AZURE_RESOURCE_GROUP: rg-portlite
-  DOTNET_VERSION: '8.0.x'
-  PUBLISH_DIR: ./publish
+concurrency:
+  group: portlite-deploy
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+  deploy:
+    runs-on: [self-hosted, portlite-vm]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Build image
+        run: docker build -t portlite-api:latest .
 
-      - name: Restore
-        run: dotnet restore Portlite.sln
-
-      - name: Publish Api (includes Blazor wwwroot)
-        run: dotnet publish src/Portlite.Api/Portlite.Api.csproj -c Release -o ${{ env.PUBLISH_DIR }} --no-restore
-
-      - name: Zip publish output
-        run: cd ${{ env.PUBLISH_DIR }} && zip -r ../app.zip .
-
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Deploy to App Service
+      - name: Recreate container
         run: |
-          az webapp deploy \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --src-path ./app.zip \
-            --type zip
+          docker rm -f portlite-api || true
+          docker run -d --name portlite-api \
+            --restart=always \
+            --network portlite_portlite \
+            --network-alias api \
+            -p 8080:8080 \
+            --env-file /home/azureuser/portlite/api.env \
+            portlite-api:latest
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ || true)
+            echo "attempt $i -> HTTP $code"
+            if [ "$code" = "200" ]; then echo "healthy"; exit 0; fi
+            sleep 3
+          done
+          echo "health check failed"; docker logs --tail 60 portlite-api; exit 1
+
+      - name: Prune dangling images
+        if: always()
+        run: docker image prune -f
