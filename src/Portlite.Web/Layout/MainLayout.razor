@@ -1,7 +1,11 @@
 @inherits LayoutComponentBase
 
 <div class="shell">
-    <button class="sidebar-toggle" @onclick="ToggleSidebar">☰</button>
+    <button class="sidebar-toggle" @onclick="ToggleSidebar" aria-label="Menü">☰</button>
+    @if (_sidebarOpen)
+    {
+        <div class="sidebar-backdrop" @onclick="CloseSidebar"></div>
+    }
     <aside class="sidebar @(_sidebarOpen ? "sidebar--open" : "")">
         <div class="sidebar__header">
             <div class="sidebar__brand">
@@ -12,7 +16,7 @@
         </div>
 
         <div class="sidebar__group-label">Görünüm</div>
-        <nav class="sidebar__nav">
+        <nav class="sidebar__nav" @onclick="CloseSidebar">
             <NavLink href="" Match="NavLinkMatch.All" class="sidebar__link">
                 <span class="sidebar__icon sidebar__icon--green">◉</span><span>Portföy</span>
             </NavLink>
@@ -31,7 +35,7 @@
         </nav>
 
         <div class="sidebar__group-label">Yönetim</div>
-        <nav class="sidebar__nav">
+        <nav class="sidebar__nav" @onclick="CloseSidebar">
             <NavLink href="portfolios" class="sidebar__link">
                 <span class="sidebar__icon sidebar__icon--purple">▤</span><span>Portföyler</span>
             </NavLink>
@@ -52,4 +56,5 @@
 @code {
     private bool _sidebarOpen;
     private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+    private void CloseSidebar() => _sidebarOpen = false;
 }

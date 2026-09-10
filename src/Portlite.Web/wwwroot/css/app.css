@@ -282,6 +282,7 @@ select {
     .sidebar {
         transform: translateX(-100%);
         transition: transform 200ms ease;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
     }
     .sidebar--open {
         transform: translateX(0);
@@ -292,8 +293,17 @@ select {
     .sidebar-toggle {
         display: inline-flex;
     }
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(2px);
+        z-index: 45;
+        animation: fade-in 150ms ease;
+    }
     .main {
         margin-left: 0;
+        padding-top: 60px;
     }
 }
 
@@ -2852,4 +2862,81 @@ table.dt td .badge--option {
 
 .pos-row--closed td { opacity: 0.55; }
 .pos-row--closed .ticker { text-decoration: line-through; }
+
+/* ============================================================
+   MOBILE RESPONSIVE — global additions
+   Contains overflow, stacks toolbars/headers, scrollable tables.
+   Desktop layout above is unchanged.
+   ============================================================ */
+
+/* Never allow the whole page to scroll sideways */
+html, body { overflow-x: hidden; }
+
+@media (max-width: 768px) {
+    /* Contain data tables inside their panel: scroll horizontally,
+       keep columns readable instead of squishing the layout. */
+    .panel { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table.dt {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+    }
+    table.dt thead th,
+    table.dt tbody td {
+        white-space: nowrap;
+    }
+    /* Tighter cell padding so more fits before scrolling */
+    table.dt thead th { padding: 10px 12px 8px; }
+    table.dt tbody td { padding: 10px 12px; }
+
+    /* Page header: stack title over its action buttons */
+    .page-title-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .page-title-row .btn-row { flex-wrap: wrap; }
+
+    /* Hero title wraps its badge instead of overflowing */
+    .page-title--hero {
+        flex-wrap: wrap;
+        font-size: 26px;
+    }
+
+    /* Toolbars / button rows wrap */
+    .toolbar { flex-wrap: wrap; align-items: stretch; }
+    .btn-row { flex-wrap: wrap; }
+
+    /* Tap targets >= 44px on touch screens */
+    .btn { min-height: 44px; }
+    .chip { min-height: 40px; }
+    .sidebar__link { padding-top: 11px; padding-bottom: 11px; }
+    .modal__close, .sidebar__close { width: 40px; height: 40px; }
+
+    /* Stack two-up form rows on narrow screens */
+    .field--row { grid-template-columns: 1fr; }
+    .tm-field-row { flex-direction: column; gap: 12px; }
+
+    /* Summary grids collapse */
+    .pos-history__summary { grid-template-columns: 1fr; }
+
+    /* Modal fits the viewport with comfortable margins */
+    .modal { width: min(540px, 94vw) !important; max-height: 90vh; }
+    .modal__body { padding: 18px; }
+    .modal__head { padding: 16px 18px 12px; }
+    .modal__foot { padding: 12px 18px; flex-wrap: wrap; }
+
+    /* News filter chips wrap */
+    .news-filters__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+}
+
+@media (max-width: 480px) {
+    .page-title { font-size: 22px; }
+    .page-title--hero { font-size: 22px; }
+    /* Full-width primary actions are easier to tap */
+    .page-title-row .btn-row .btn { flex: 1 1 auto; justify-content: center; }
+    .modal__foot .btn { flex: 1 1 auto; justify-content: center; }
+}
 
